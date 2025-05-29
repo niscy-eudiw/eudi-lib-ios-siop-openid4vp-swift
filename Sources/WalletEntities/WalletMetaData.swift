@@ -47,7 +47,9 @@ public func walletMetaData(
       let encryptionRequirementSpecification
     ):
       if let key = key,
-         let publicKey = try? KeyController.generateECDHPublicKey(from: key),
+         let publicKey = try? KeyController.generateECDHPublicKey(
+          from: key
+         ),
          let publicJwk = try? ECPublicKey(
            publicKey: publicKey,
            additionalParameters: [
