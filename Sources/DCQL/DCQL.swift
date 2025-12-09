@@ -136,7 +136,7 @@ public struct CredentialSetQuery: Codable, Equatable, Sendable {
   public static let defaultRequiredValue: Bool = true
   
   public let options: [CredentialSet]
-  public let required: Bool
+  public let required: Bool?
   
   enum CodingKeys: String, CodingKey {
     case options, required
@@ -156,7 +156,7 @@ public struct CredentialSetQuery: Codable, Equatable, Sendable {
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     self.options = try container.decode([CredentialSet].self, forKey: .options)
-    self.required = try container.decode(Bool.self, forKey: .required)
+    self.required = try? container.decode(Bool.self, forKey: .required)
   }
 }
 
