@@ -20,7 +20,6 @@ This enum represents a set of JOSE (Javascript Object Signing and Encryption) er
 It conforms to the LocalizedError protocol so we can get a human-readable error description.
 */
 public enum JOSEError: LocalizedError {
-  // The error case representing an unsupported request
   case notSupportedRequest
   case invalidPublicKey
   case invalidJWS
@@ -28,7 +27,6 @@ public enum JOSEError: LocalizedError {
   case invalidVerifier
   case invalidObjectType
 
-  // A computed property to provide a description for each error case
   public var errorDescription: String? {
     switch self {
     case .notSupportedRequest:
