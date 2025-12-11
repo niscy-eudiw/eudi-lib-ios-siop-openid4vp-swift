@@ -379,7 +379,7 @@ d82/03tD1U0Slpjr2098V5XpQMeSveb/elCPCohSBt7tBiaN98zc
     
     let chainVerifier = X509CertificateChainVerifier()
     let roots = try! TestsConstants.loadRootCertificates()
-    var result = true
+    var result = false
     let c: [String] = certificates
     for root in roots {
       let verified = try? chainVerifier.verifyCertificateChain(
@@ -387,6 +387,10 @@ d82/03tD1U0Slpjr2098V5XpQMeSveb/elCPCohSBt7tBiaN98zc
       )
       let r = chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
       result = result || r
+      
+      if result {
+        break
+      }
     }
     return result
   }

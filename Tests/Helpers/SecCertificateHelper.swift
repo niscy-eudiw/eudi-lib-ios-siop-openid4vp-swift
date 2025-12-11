@@ -174,7 +174,7 @@ public struct SecCertificateHelper: Sendable {
     }
     
     let leafCert = certs.last!
-    let rootCerts = certs.dropLast()
+    let rootCerts = certs.first!
     let chain: [SecCertificate] = [leafCert]
     let policy = SecPolicyCreateBasicX509()
     
