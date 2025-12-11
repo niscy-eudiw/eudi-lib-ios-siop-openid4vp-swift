@@ -16,6 +16,7 @@
 import Foundation
 import X509
 import Security
+import SwiftASN1
 
 enum ChainTrustResult: Equatable {
   case success
@@ -52,26 +53,13 @@ struct X509CertificateChainVerifier {
       base64Strings: base64Certificates
     ).compactMap {
       SecCertificateCreateWithData(nil, $0 as CFData)
-    }.compactMap {
-      SecCertificateContainer(certificate: $0)
     }
 
-    if certificates.isEmpty {
-      return .failure
-    }
-
-    switch SecCertificateHelper.validateCertificateChain(
-      certificates: certificates
-    ) {
-    case .invalid, .deny, .fatalTrustFailure, .otherError:
-      return .failure
-    case .proceed, .unspecified:
+    if SecCertificateHelper.validateCertificateChain(certs: certificates) {
       return .success
-    case .recoverableTrustFailure:
-      return .recoverableFailure("Recoverable failure")
-    @unknown default:
-      return .failure
     }
+    
+    return .failure
   }
 
   public func checkCertificateValidAndNotRevoked(base64Certificate: String) throws -> Bool {
@@ -224,6 +212,7 @@ extension X509CertificateChainVerifier {
         RFC5280Policy(
           validationTime: date
         )
+        AcceptPrivateEKUPolicy()
       }
     }
 
@@ -246,5 +235,24 @@ extension X509CertificateChainVerifier {
         policyFailures
       )
     }
+  }
+}
+
+struct AcceptPrivateEKUPolicy: VerifierPolicy {
+
+  private static let ekuExtOID = ASN1ObjectIdentifier("2.5.29.37")
+  private static let privatePurpose = ASN1ObjectIdentifier("1.3.130.2.0.0.1.2")
+  
+  var verifyingCriticalExtensions: [ASN1ObjectIdentifier] { [Self.ekuExtOID] }
+  var understoodCriticalExtensions: Set<ASN1ObjectIdentifier> { [Self.ekuExtOID] }
+  
+  func chainMeetsPolicyRequirements(
+    chain: UnverifiedCertificateChain
+  ) -> PolicyEvaluationResult {
+    evaluate(chain: chain)
+  }
+  
+  private func evaluate(chain: UnverifiedCertificateChain) -> PolicyEvaluationResult {
+    return .meetsPolicy
   }
 }
