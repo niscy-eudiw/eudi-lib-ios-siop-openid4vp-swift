@@ -289,17 +289,18 @@ final class DirectPostJWTTests: DiXCTest {
     let rsaPrivateKey = try KeyController.generateRSAPrivateKey()
     let rsaPublicKey = try KeyController.generateRSAPublicKey(from: rsaPrivateKey)
     let privateKey = try KeyController.generateECDHPrivateKey()
+    let publicKey = try KeyController.generateECDHPublicKey(from: privateKey)
     
-    let rsaJWK = try RSAPublicKey(
-      publicKey: rsaPublicKey,
+    let ecJWK = try ECPublicKey(
+      publicKey: publicKey,
       additionalParameters: [
         "use": "sig",
         "kid": UUID().uuidString,
-        "alg": "RS256"
+        "alg": "ES256"
       ])
     
     let verifiedClient = try! VerifierId.parse(clientId: session["client_id"] as! String).get()
-    let keySet = try WebKeySet(jwk: rsaJWK)
+    let keySet = try WebKeySet(jwk: ecJWK)
     let publicKeysURL = URL(string: "\(TestsConstants.host)/wallet/public-keys.json")!
     let wallet: OpenId4VPConfiguration = .init(
       privateKey: privateKey,
@@ -309,7 +310,7 @@ final class DirectPostJWTTests: DiXCTest {
           verifiedClient.originalClientId: .init(
             clientId: TestsConstants.testClientId,
             legalName: "Verifier",
-            jarSigningAlg: .init(.RS256),
+            jarSigningAlg: .init(.ES256),
             jwkSetSource: .fetchByReference(url: publicKeysURL)
           )
         ])
@@ -502,11 +503,7 @@ final class DirectPostJWTTests: DiXCTest {
       ])
     
     let chainVerifier = { certificates in
-      let chainVerifier = X509CertificateChainVerifier()
-      let verified = try? chainVerifier.verifyCertificateChain(
-        base64Certificates: certificates
-      )
-      return chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
+      return TestsConstants.verifyChain(certificates)
     }
     
     let keySet = try WebKeySet(jwk: rsaJWK)
@@ -601,12 +598,8 @@ final class DirectPostJWTTests: DiXCTest {
         "alg": "RS256"
       ])
     
-    let chainVerifier = { certificates in
-      let chainVerifier = X509CertificateChainVerifier()
-      let verified = try? chainVerifier.verifyCertificateChain(
-        base64Certificates: certificates
-      )
-      return chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
+    let chainVerifier: CertificateTrust = { certificates in
+      TestsConstants.verifyChain(certificates)
     }
     
     let keySet = try WebKeySet(jwk: rsaJWK)
@@ -704,11 +697,7 @@ final class DirectPostJWTTests: DiXCTest {
       ])
     
     let chainVerifier = { certificates in
-      let chainVerifier = X509CertificateChainVerifier()
-      let verified = try? chainVerifier.verifyCertificateChain(
-        base64Certificates: certificates
-      )
-      return chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
+      return TestsConstants.verifyChain(certificates)
     }
     
     let keySet = try WebKeySet(jwk: rsaJWK)
@@ -815,11 +804,7 @@ final class DirectPostJWTTests: DiXCTest {
       ])
     
     let chainVerifier = { certificates in
-      let chainVerifier = X509CertificateChainVerifier()
-      let verified = try? chainVerifier.verifyCertificateChain(
-        base64Certificates: certificates
-      )
-      return chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
+      return TestsConstants.verifyChain(certificates)
     }
     
     let keySet = try WebKeySet(jwk: rsaJWK)
@@ -935,11 +920,7 @@ final class DirectPostJWTTests: DiXCTest {
       ])
     
     let chainVerifier = { certificates in
-      let chainVerifier = X509CertificateChainVerifier()
-      let verified = try? chainVerifier.verifyCertificateChain(
-        base64Certificates: certificates
-      )
-      return chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
+      return TestsConstants.verifyChain(certificates)
     }
     
     let keySet = try WebKeySet(jwk: rsaJWK)
@@ -1231,18 +1212,7 @@ final class DirectPostJWTTests: DiXCTest {
       ])
     
     let chainVerifier: CertificateTrust = { certificates in
-      
-      guard let leaf = certificates.first else {
-        return false
-      }
-      
-      let chainVerifier = X509CertificateChainVerifier()
-      let verified = try? await chainVerifier.verifyChain(
-        rootBase64Certificates: TestsConstants.loadRootCertificates(),
-        intermediateBase64Certificates: Array(certificates.dropFirst()),
-        leafBase64Certificate: leaf
-      )
-      return chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
+      return TestsConstants.verifyChain(certificates)
     }
     
     let keySet = try WebKeySet(jwk: rsaJWK)
