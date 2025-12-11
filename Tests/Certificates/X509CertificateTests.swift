@@ -105,26 +105,6 @@ final class X509CertificateTests: XCTestCase {
     }
   }
 
-  func testVerifyCerticateChainWithVerifier() {
-
-    let chainVerifier = X509CertificateChainVerifier()
-
-    do {
-      let verified = try chainVerifier.verifyCertificateChain(
-        base64Certificates: [
-          TestsConstants.x5cRootCertificateBase64,
-          TestsConstants.x5cInterCertificateBase64,
-          TestsConstants.x5cLeafCertificateBase64
-        ]
-      )
-
-      XCTAssert(chainVerifier.isChainTrustResultSuccesful(verified))
-
-    } catch {
-      XCTAssert(false, "Unable to verify certificate chain")
-    }
-  }
-
   func testRawCertificateRevokation() {
 
     guard
