@@ -374,6 +374,22 @@ d82/03tD1U0Slpjr2098V5XpQMeSveb/elCPCohSBt7tBiaN98zc
       return data.base64EncodedString()
     }
   }
+  
+  static func verifyChain(_ certificates: [String]) -> Bool {
+    
+    let chainVerifier = X509CertificateChainVerifier()
+    let roots = try! TestsConstants.loadRootCertificates()
+    var result = true
+    let c: [String] = certificates
+    for root in roots {
+      let verified = try? chainVerifier.verifyCertificateChain(
+        base64Certificates: [root] + c
+      )
+      let r = chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
+      result = result || r
+    }
+    return result
+  }
 }
 
 func generateVerifiablePresentation(
