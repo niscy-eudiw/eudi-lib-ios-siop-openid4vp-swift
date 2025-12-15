@@ -29,7 +29,7 @@ public extension ResponseEncryptionConfiguration {
   static func `default`() -> ResponseEncryptionConfiguration {
     .supported(
       supportedAlgorithms: [.init(.ECDH_ES)],
-      supportedMethods: [.init(.A128GCM)]
+      supportedMethods: [.init(.A128GCM), .init(.A256GCM)]
     )
   }
   
