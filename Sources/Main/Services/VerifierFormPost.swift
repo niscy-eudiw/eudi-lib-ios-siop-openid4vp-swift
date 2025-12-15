@@ -30,10 +30,7 @@ public struct VerifierFormPost: Request {
 
   /// The request body as data.
   public var body: Data? {
-    var formDataComponents = URLComponents()
-    formDataComponents.queryItems = formData.toQueryItems()
-    let formDataString = formDataComponents.query
-    return formDataString?.data(using: .utf8)
+    return try? FormURLEncoder.body(from: formData)
   }
 
   /// The form data for the request.

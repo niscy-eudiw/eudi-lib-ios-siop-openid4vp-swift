@@ -23,12 +23,12 @@ public protocol AccessValidating: Sendable {
 
 public actor AccessValidator: AccessValidating {
 
-  public let walletOpenId4VPConfig: SiopOpenId4VPConfiguration?
+  public let walletOpenId4VPConfig: OpenId4VPConfiguration?
   private let fetcher: any Fetching
   private let objectType: JOSEObjectType
 
   public init(
-    walletOpenId4VPConfig: SiopOpenId4VPConfiguration?,
+    walletOpenId4VPConfig: OpenId4VPConfiguration?,
     objectType: JOSEObjectType = .REQ_JWT,
     fetcher: any Fetching = Fetcher<WebKeySet>()
   ) {
@@ -54,19 +54,28 @@ public actor AccessValidator: AccessValidating {
       throw ValidationError.unsupportedClientIdScheme(nil)
     }
 
-    switch clientIdScheme {
+    let supported = walletOpenId4VPConfig?.supportedClientIdSchemes.first(where: {
+      $0.scheme == clientIdScheme
+    })
+    let scheme = supported ?? walletOpenId4VPConfig?.supportedClientIdSchemes.first(where: {
+      return switch $0 {
+      case .preregistered: true
+      case .redirectUri: true
+      default: false
+      }
+    })
+    
+    switch scheme?.scheme {
     case .preRegistered:
-      let supported: SupportedClientIdPrefix? = walletOpenId4VPConfig?.supportedClientIdSchemes.first(where: { $0.scheme == clientIdScheme })
       try await validatePreregistered(
-        supportedClientIdScheme: supported,
+        supportedClientIdScheme: scheme,
         clientId: clientId,
         jws: jws
       )
     case .x509SanDns,
          .x509Hash:
-      let supported: SupportedClientIdPrefix? = walletOpenId4VPConfig?.supportedClientIdSchemes.first(where: { $0.scheme == clientIdScheme })
       try await validateX509(
-        supportedClientIdScheme: supported,
+        supportedClientIdScheme: scheme,
         clientId: clientId,
         jws: jws,
         alternativeNames: { certificate in
@@ -77,7 +86,8 @@ public actor AccessValidator: AccessValidating {
           return alternativeNames ?? []
         }
       )
-    default: break
+    case .redirectUri: break
+    default: throw ValidationError.unsupportedClientIdScheme(nil)
     }
   }
 
@@ -99,8 +109,19 @@ public actor AccessValidator: AccessValidating {
       throw ValidationError.validationError("x5c header field does not contain a serialized leaf certificate")
     }
 
+    guard let leafCertificate = certificates.first else {
+      throw ValidationError.validationError("Could not locate leaf certificate")
+    }
+    
     switch supportedClientIdScheme {
     case .x509SanDns(let trust):
+      let verifierId = VerifierId.parse(clientId: clientId)
+      let alternativeNames = alternativeNames(leafCertificate)
+      if let originalClientId = try? verifierId.get().originalClientId,
+         !alternativeNames.contains(originalClientId) {
+        throw ValidationError.validationError("Client id (\(clientId) not part of list (\(alternativeNames))")
+      }
+      
       let trust = await trust(chain)
       if !trust {
         throw ValidationError.validationError("Could not trust certificate chain")
@@ -111,17 +132,6 @@ public actor AccessValidator: AccessValidating {
         throw ValidationError.validationError("Could not trust certificate chain")
       }
     default: throw ValidationError.validationError("Invalid client id scheme for x509")
-    }
-
-    guard let leafCertificate = certificates.first else {
-      throw ValidationError.validationError("Could not locate leaf certificate")
-    }
-
-    let verifierId = VerifierId.parse(clientId: clientId)
-    let alternativeNames = alternativeNames(leafCertificate)
-    if let originalClientId = try? verifierId.get().originalClientId,
-       !alternativeNames.contains(originalClientId) {
-      throw ValidationError.validationError("Client id (\(clientId) not part of list (\(alternativeNames))")
     }
 
     let publicKey = leafCertificate.publicKey
@@ -163,7 +173,7 @@ public actor AccessValidator: AccessValidating {
 
     switch supportedClientIdScheme {
     case .preregistered(let clients):
-      guard let client = clients[clientId] else {
+      guard let client = clients[clients.keys.first!] else {
         throw ValidationError.validationError("Client with client_id \(clientId) is not pre-registered")
       }
       try await verifySignature(

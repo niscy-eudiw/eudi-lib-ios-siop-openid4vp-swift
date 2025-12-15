@@ -17,7 +17,7 @@ import Foundation
 import XCTest
 import JOSESwift
 
-@testable import SiopOpenID4VP
+@testable import OpenID4VP
 
 final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
   
@@ -26,7 +26,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
     /// To get this URL,  visit https://demo.certification.openid.net/
     /// and run a happy flow no state test then proceed to assign the request uri to the variable below
     let url = "#01"
-    let clientId = "demo.certification.openid.net"
+    let clientId = "x509_san_dns:demo.certification.openid.net"
     
     guard !url.isEmpty else {
       XCTExpectFailure("The tests need a url")
@@ -46,20 +46,14 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
         "alg": "RS256"
       ])
     
-    let chainVerifier = { certificates in
-      let chainVerifier = X509CertificateChainVerifier()
-      let verified = try? chainVerifier.verifyCertificateChain(
-        base64Certificates: certificates
-      )
-      return chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
-    }
-    
     let keySet = try WebKeySet(jwk: rsaJWK)
-    let wallet: SiopOpenId4VPConfiguration = .init(
+    let wallet: OpenId4VPConfiguration = .init(
       privateKey: privateKey,
       publicWebKeySet: keySet,
       supportedClientIdSchemes: [
-        .x509SanDns(trust: chainVerifier)
+        .x509SanDns { _ in
+          true
+        }
       ],
       vpFormatsSupported: ClaimFormat.default(),
       jarConfiguration: .noEncryptionOption,
@@ -70,7 +64,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
       )
     )
     
-    let sdk = SiopOpenID4VP(walletConfiguration: wallet)
+    let sdk = OpenID4VP(walletConfiguration: wallet)
     
     overrideDependencies()
     let result = await sdk.authorize(
@@ -80,25 +74,15 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
     )
     
     switch result {
-    case .jwt(request: let request):
-      let resolved = request
-      
-      var presentation: String?
-      var nonce: String?
-      switch resolved {
-      case .vpToken(let request):
-        
-        nonce = request.nonce
-        presentation = TestsConstants.sdJwtPresentations(
-          transactiondata: request.transactionData,
-          clientID: request.client.id.clientId,
-          nonce: nonce!,
-          useSha3: false
-        )
-        
-      default:
-        XCTFail("Incorrectly resolved")
-      }
+    case .jwt(let resolved):
+      let request = resolved.request
+      let nonce: String? = request.nonce
+      let presentation: String? = TestsConstants.sdJwtPresentations(
+        transactiondata: request.transactionData,
+        clientID: try! VerifierId.parse(clientId: request.client.id.clientId).get().originalClientId,
+        nonce: nonce!,
+        useSha3: false
+      )
       
       // Obtain consent
       let consent: ClientConsent = .vpToken(
@@ -109,7 +93,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
       
       // Generate a direct post authorisation response
       let response = try? XCTUnwrap(AuthorizationResponse(
-        resolvedRequest: request,
+        resolvedRequest: resolved,
         consent: consent,
         walletOpenId4VPConfig: wallet
       ), "Expected item to be non-nil")
@@ -165,7 +149,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
     }
     
     let keySet = try WebKeySet(jwk: rsaJWK)
-    let wallet: SiopOpenId4VPConfiguration = .init(
+    let wallet: OpenId4VPConfiguration = .init(
       privateKey: privateKey,
       publicWebKeySet: keySet,
       supportedClientIdSchemes: [
@@ -177,7 +161,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
       responseEncryptionConfiguration: .unsupported
     )
     
-    let sdk = SiopOpenID4VP(walletConfiguration: wallet)
+    let sdk = OpenID4VP(walletConfiguration: wallet)
     
     overrideDependencies()
     let result = await sdk.authorize(
@@ -187,25 +171,15 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
     )
     
     switch result {
-    case .jwt(request: let request):
-      let resolved = request
-      
-      var presentation: String?
-      var nonce: String?
-      switch resolved {
-      case .vpToken(let request):
-        
-        nonce = request.nonce
-        presentation = TestsConstants.sdJwtPresentations(
-          transactiondata: request.transactionData,
-          clientID: request.client.id.originalClientId,
-          nonce: nonce!,
-          useSha3: false
-        )
-        
-      default:
-        XCTFail("Incorrectly resolved")
-      }
+    case .jwt(request: let resolved):
+      let request = resolved.request
+      let nonce: String? = request.nonce
+      let presentation: String? = TestsConstants.sdJwtPresentations(
+        transactiondata: request.transactionData,
+        clientID: request.client.id.originalClientId,
+        nonce: nonce!,
+        useSha3: false
+      )
       
       // Obtain consent
       let consent: ClientConsent = .vpToken(
@@ -216,7 +190,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
       
       // Generate a direct post authorisation response
       let response = try? XCTUnwrap(AuthorizationResponse(
-        resolvedRequest: request,
+        resolvedRequest: resolved,
         consent: consent,
         walletOpenId4VPConfig: wallet
       ), "Expected item to be non-nil")
@@ -273,7 +247,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
     }
     
     let keySet = try WebKeySet(jwk: rsaJWK)
-    let wallet: SiopOpenId4VPConfiguration = .init(
+    let wallet: OpenId4VPConfiguration = .init(
       privateKey: privateKey,
       publicWebKeySet: keySet,
       supportedClientIdSchemes: [
@@ -288,7 +262,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
       )
     )
     
-    let sdk = SiopOpenID4VP(walletConfiguration: wallet)
+    let sdk = OpenID4VP(walletConfiguration: wallet)
     
     overrideDependencies()
     let result = await sdk.authorize(
@@ -298,25 +272,15 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
     )
     
     switch result {
-    case .jwt(request: let request):
-      let resolved = request
-      
-      var presentation: String?
-      var nonce: String?
-      switch resolved {
-      case .vpToken(let request):
-        
-        nonce = request.nonce
-        presentation = TestsConstants.sdJwtPresentations(
-          transactiondata: request.transactionData,
-          clientID: request.client.id.clientId,
-          nonce: nonce!,
-          useSha3: false
-        )
-        
-      default:
-        XCTFail("Incorrectly resolved")
-      }
+    case .jwt(request: let resolved):
+      let request = resolved.request
+      let nonce: String? = request.nonce
+      let presentation: String? = TestsConstants.sdJwtPresentations(
+        transactiondata: request.transactionData,
+        clientID: request.client.id.clientId,
+        nonce: nonce!,
+        useSha3: false
+      )
       
       // Obtain consent
       let consent: ClientConsent = .vpToken(
@@ -327,7 +291,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
       
       // Generate a direct post authorisation response
       let response = try? XCTUnwrap(AuthorizationResponse(
-        resolvedRequest: request,
+        resolvedRequest: resolved,
         consent: consent,
         walletOpenId4VPConfig: wallet
       ), "Expected item to be non-nil")

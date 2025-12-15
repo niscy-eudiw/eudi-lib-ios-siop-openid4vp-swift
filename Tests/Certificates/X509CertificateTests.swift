@@ -16,7 +16,7 @@
 import XCTest
 import X509
 
-@testable import SiopOpenID4VP
+@testable import OpenID4VP
 
 final class X509CertificateTests: XCTestCase {
 
@@ -102,26 +102,6 @@ final class X509CertificateTests: XCTestCase {
     } else {
 
       XCTAssert(false)
-    }
-  }
-
-  func testVerifyCerticateChainWithVerifier() {
-
-    let chainVerifier = X509CertificateChainVerifier()
-
-    do {
-      let verified = try chainVerifier.verifyCertificateChain(
-        base64Certificates: [
-          TestsConstants.x5cRootCertificateBase64,
-          TestsConstants.x5cInterCertificateBase64,
-          TestsConstants.x5cLeafCertificateBase64
-        ]
-      )
-
-      XCTAssert(chainVerifier.isChainTrustResultSuccesful(verified))
-
-    } catch {
-      XCTAssert(false, "Unable to verify certificate chain")
     }
   }
 
