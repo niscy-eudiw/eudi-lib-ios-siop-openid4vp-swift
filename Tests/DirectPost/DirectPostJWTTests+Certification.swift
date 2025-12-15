@@ -26,7 +26,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
     /// To get this URL,  visit https://demo.certification.openid.net/
     /// and run a happy flow no state test then proceed to assign the request uri to the variable below
     let url = "#01"
-    let clientId = "demo.certification.openid.net"
+    let clientId = "x509_san_dns:demo.certification.openid.net"
     
     guard !url.isEmpty else {
       XCTExpectFailure("The tests need a url")
@@ -46,20 +46,14 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
         "alg": "RS256"
       ])
     
-    let chainVerifier = { certificates in
-      let chainVerifier = X509CertificateChainVerifier()
-      let verified = try? chainVerifier.verifyCertificateChain(
-        base64Certificates: certificates
-      )
-      return chainVerifier.isChainTrustResultSuccesful(verified ?? .failure)
-    }
-    
     let keySet = try WebKeySet(jwk: rsaJWK)
     let wallet: OpenId4VPConfiguration = .init(
       privateKey: privateKey,
       publicWebKeySet: keySet,
       supportedClientIdSchemes: [
-        .x509SanDns(trust: chainVerifier)
+        .x509SanDns { _ in
+          true
+        }
       ],
       vpFormatsSupported: ClaimFormat.default(),
       jarConfiguration: .noEncryptionOption,
@@ -85,7 +79,7 @@ final class DirectPostJWTCertificationAndConformanceTests: DiXCTest {
       let nonce: String? = request.nonce
       let presentation: String? = TestsConstants.sdJwtPresentations(
         transactiondata: request.transactionData,
-        clientID: request.client.id.clientId,
+        clientID: try! VerifierId.parse(clientId: request.client.id.clientId).get().originalClientId,
         nonce: nonce!,
         useSha3: false
       )
