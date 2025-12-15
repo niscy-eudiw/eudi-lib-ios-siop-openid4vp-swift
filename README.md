@@ -5,6 +5,18 @@ the [EUDI Wallet Reference Implementation project description](https://github.co
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
+:heavy_exclamation_mark: **Repository Renamed**
+
+This repository has been renamed to **eudi-lib-ios-openid4vp-swift**.
+Please update your Git remotes:
+
+```bash
+git remote set-url origin https://github.com/eu-digital-identity-wallet/eudi-lib-ios-openid4vp-swift.git
+```
+
+All future development will take place in the renamed repository.
+
+
 ## Table of contents
 
 * [Introduction](#introduction)
