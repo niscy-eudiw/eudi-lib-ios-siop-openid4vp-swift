@@ -60,6 +60,7 @@ public actor AccessValidator: AccessValidating {
     let scheme = supported ?? walletOpenId4VPConfig?.supportedClientIdSchemes.first(where: {
       return switch $0 {
       case .preregistered: true
+      case .redirectUri: true
       default: false
       }
     })
@@ -85,6 +86,7 @@ public actor AccessValidator: AccessValidating {
           return alternativeNames ?? []
         }
       )
+    case .redirectUri: break
     default: throw ValidationError.unsupportedClientIdScheme(nil)
     }
   }
