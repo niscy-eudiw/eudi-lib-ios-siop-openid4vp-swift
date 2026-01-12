@@ -70,6 +70,14 @@ internal actor RequestFetcher {
       )
       return (jwt, nil)
     case .POST:
+      if config?.jarConfiguration.supportedRequestUriMethods.isPostSupported() == nil {
+        let jwt = try await getJwtViaGET(
+          config: config,
+          requestUrl: requestUrl
+        )
+        return (jwt, nil)
+      }
+        
       let (jwt, nonce) = try await getJwtViaPOST(
         config: config,
         requestUrl: requestUrl,
@@ -141,6 +149,7 @@ internal actor RequestFetcher {
     )
     
     let finalJwt = try decryptIfNeeded(
+      config: config,
       jwt: jwt,
       keyManagementAlgorithm: config?.jarConfiguration.supportedEncryption?.supportedEncryptionAlgorithm,
       contentEncryptionAlgorithm: config?.jarConfiguration.supportedEncryption?.supportedEncryptionMethod,
@@ -232,6 +241,7 @@ internal actor RequestFetcher {
   }
   
   private func decryptIfNeeded(
+    config: OpenId4VPConfiguration?,
     jwt: String,
     keyManagementAlgorithm: KeyManagementAlgorithm?,
     contentEncryptionAlgorithm: ContentEncryptionAlgorithm?,
@@ -247,6 +257,39 @@ internal actor RequestFetcher {
     
     do {
       let encryptedJwe = try JWE(compactSerialization: jwt)
+        
+      let supportedEncryptionAlgorithms: [KeyManagementAlgorithm] = config?.responseEncryptionConfiguration.supportedAlgorithms.compactMap { algorithm in
+          return KeyManagementAlgorithm(algorithm: algorithm)
+      } ?? []
+      
+      guard let headerKeyManagementAlgorithm = encryptedJwe.header.keyManagementAlgorithm else {
+        throw ValidationError.validationError(
+          "JWE header does not contain key management algorithm"
+        )
+      }
+      
+      if !supportedEncryptionAlgorithms.contains(headerKeyManagementAlgorithm) {
+        throw ValidationError.validationError(
+          "JWEObject must contain a supported encryption algorithm"
+        )
+      }
+      
+      let supportedEncryptionMethods: [ContentEncryptionAlgorithm] = config?.responseEncryptionConfiguration.supportedMethods.compactMap { method in
+        return ContentEncryptionAlgorithm(encryptionMethod: method)
+      } ?? []
+      
+      guard let headerContentEncryptionAlgorithm = encryptedJwe.header.contentEncryptionAlgorithm else {
+        throw ValidationError.validationError(
+          "JWE header does not contain key management algorithm"
+        )
+      }
+      
+      if !supportedEncryptionMethods.contains(headerContentEncryptionAlgorithm) {
+        throw ValidationError.validationError(
+          "JWEObject must contain a supported encryption method"
+        )
+      }
+        
       guard let decrypter = Decrypter(
         keyManagementAlgorithm: keyManagementAlgorithm,
         contentEncryptionAlgorithm: contentEncryptionAlgorithm,

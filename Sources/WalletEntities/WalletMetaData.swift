@@ -56,12 +56,28 @@ public func walletMetaData(
          publicJwk["crv"] == encryptionRequirementSpecification.ephemeralEncryptionKeyCurve.rawValue {
 
         json[JWKS] = jwkJson
-        json[AUTHORIZATION_ENCRYPTION_ALG_VALUES_SUPPORTED] = JSON(
+        json[REQUEST_OBJECT_ENCRYPTION_ALG_VALUES_SUPPORTED] = JSON(
           [encryptionRequirementSpecification.supportedEncryptionAlgorithm.rawValue]
         )
-        json[AUTHORIZATION_ENCRYPTION_ENC_VALUES_SUPPORTED] = JSON(
+        json[REQUEST_OBJECT_ENCRYPTION_ENC_VALUES_SUPPORTED] = JSON(
           [encryptionRequirementSpecification.supportedEncryptionMethod.rawValue]
         )
+        
+        // Response Encryption
+        let responseEncryptionConfiguration = config.responseEncryptionConfiguration
+        switch responseEncryptionConfiguration {
+        case .supported(
+          let supportedAlgorithms,
+          let supportedMethods
+        ):
+          json[AUTHORIZATION_ENCRYPTION_ALG_VALUES_SUPPORTED] = JSON(
+            supportedAlgorithms
+          )
+          json[AUTHORIZATION_ENCRYPTION_ENC_VALUES_SUPPORTED] = JSON(
+            supportedMethods
+          )
+        default: break
+        }
       }
     }
   }
@@ -71,8 +87,13 @@ public func walletMetaData(
 
 private let REQUEST_OBJECT_SIGNING_ALG_VALUES_SUPPORTED = "request_object_signing_alg_values_supported"
 private let AUTHORIZATION_SIGNING_ALG_VALUES_SUPPORTED = "authorization_signing_alg_values_supported"
+
 private let AUTHORIZATION_ENCRYPTION_ALG_VALUES_SUPPORTED = "authorization_encryption_alg_values_supported"
 private let AUTHORIZATION_ENCRYPTION_ENC_VALUES_SUPPORTED = "authorization_encryption_enc_values_supported"
+
+private let REQUEST_OBJECT_ENCRYPTION_ALG_VALUES_SUPPORTED = "request_object_encryption_alg_values_supported"
+private let REQUEST_OBJECT_ENCRYPTION_ENC_VALUES_SUPPORTED = "request_object_encryption_enc_values_supported"
+
 private let PRESENTATION_DEFINITION_URI_SUPPORTED = "presentation_definition_uri_supported"
 private let CLIENT_ID_SCHEMES_SUPPORTED = "client_id_schemes_supported"
 private let CLIENT_ID_PREFIXES_SUPPORTED = "client_id_prefixes_supported"
