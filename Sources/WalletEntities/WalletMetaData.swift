@@ -71,10 +71,10 @@ public func walletMetaData(
           let supportedMethods
         ):
           json[AUTHORIZATION_ENCRYPTION_ALG_VALUES_SUPPORTED] = JSON(
-            supportedAlgorithms
+            supportedAlgorithms.map { $0.name }
           )
           json[AUTHORIZATION_ENCRYPTION_ENC_VALUES_SUPPORTED] = JSON(
-            supportedMethods
+            supportedMethods.map { $0.name }
           )
         default: break
         }

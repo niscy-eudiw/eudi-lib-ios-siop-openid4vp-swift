@@ -151,8 +151,6 @@ internal actor RequestFetcher {
     let finalJwt = try decryptIfNeeded(
       config: config,
       jwt: jwt,
-      keyManagementAlgorithm: config?.jarConfiguration.supportedEncryption?.supportedEncryptionAlgorithm,
-      contentEncryptionAlgorithm: config?.jarConfiguration.supportedEncryption?.supportedEncryptionMethod,
       keys: keys
     )
     
@@ -243,16 +241,10 @@ internal actor RequestFetcher {
   private func decryptIfNeeded(
     config: OpenId4VPConfiguration?,
     jwt: String,
-    keyManagementAlgorithm: KeyManagementAlgorithm?,
-    contentEncryptionAlgorithm: ContentEncryptionAlgorithm?,
     keys: (key: SecKey, jwk: ECPrivateKey)?
   ) throws -> String {
     guard let jwk = keys?.jwk else {
       return jwt
-    }
-    
-    guard let keyManagementAlgorithm, let contentEncryptionAlgorithm else {
-      throw AuthorizationError.invalidAlgorithms
     }
     
     do {
@@ -291,20 +283,21 @@ internal actor RequestFetcher {
       }
         
       guard let decrypter = Decrypter(
-        keyManagementAlgorithm: keyManagementAlgorithm,
-        contentEncryptionAlgorithm: contentEncryptionAlgorithm,
+        keyManagementAlgorithm: headerKeyManagementAlgorithm,
+        contentEncryptionAlgorithm: headerContentEncryptionAlgorithm,
         decryptionKey: jwk
       ) else {
         throw AuthorizationError.jwtDecryptionFailed
       }
       
       let payloadData = try encryptedJwe.decrypt(using: decrypter).data()
-      guard let decoded = payloadData.base64EncodedString().base64Decoded(),
-            let jwtString = String(data: decoded, encoding: .utf8) else {
+      guard
+        let decoded = payloadData.base64EncodedString().base64Decoded(),
+        let jwtString = String(data: decoded, encoding: .utf8) else {
         throw AuthorizationError.jwtDecryptionFailed
       }
-      
       return jwtString
+      
     } catch {
       return jwt
     }
