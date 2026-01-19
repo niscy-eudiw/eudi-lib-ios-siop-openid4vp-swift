@@ -66,6 +66,7 @@ internal actor RequestFetcher {
     case .GET:
       let jwt = try await getJwtViaGET(
         config: config,
+        clientId: clientId,
         requestUrl: requestUrl
       )
       return (jwt, nil)
@@ -73,6 +74,7 @@ internal actor RequestFetcher {
       if config?.jarConfiguration.supportedRequestUriMethods.isPostSupported() == nil {
         let jwt = try await getJwtViaGET(
           config: config,
+          clientId: clientId,
           requestUrl: requestUrl
         )
         return (jwt, nil)
@@ -89,14 +91,25 @@ internal actor RequestFetcher {
   
   private func getJwtViaGET(
     config: OpenId4VPConfiguration?,
+    clientId: String?,
     requestUrl: URL
   ) async throws -> String {
-    return try await getJwtString(
+    let jwt = try await getJwtString(
       fetcher: Fetcher(
         session: config?.session ?? URLSession.shared
       ),
       requestUrl: requestUrl
     )
+    
+    let expectedWalletAudience: String? = OpenId4VPConfiguration.SelfIssued?.absoluteString
+    try config?.ensureJWTValid(
+      expectedClient: clientId,
+      expectedWalletNonce: nil,
+      expectedWalletAudience: expectedWalletAudience,
+      jwt: jwt
+    )
+    
+    return jwt
   }
   
   fileprivate struct ResultType: Codable {}
@@ -154,9 +167,13 @@ internal actor RequestFetcher {
       keys: keys
     )
     
-    try config?.ensureValid(
+    let expectedWalletAudience: String? = walletMetadata != nil
+      ? config?.issuer?.absoluteString
+      : OpenId4VPConfiguration.SelfIssued?.absoluteString
+    try config?.ensureJWTValid(
       expectedClient: clientId,
       expectedWalletNonce: nonce,
+      expectedWalletAudience: expectedWalletAudience,
       jwt: finalJwt
     )
     
@@ -327,9 +344,10 @@ internal actor RequestFetcher {
 
 internal extension OpenId4VPConfiguration {
   
-  func ensureValid(
+  func ensureJWTValid(
     expectedClient: String?,
     expectedWalletNonce: String?,
+    expectedWalletAudience: String?,
     jwt: JWTString
   ) throws {
     
@@ -344,6 +362,16 @@ internal extension OpenId4VPConfiguration {
       key: "client_id"
     ) as? String else {
       throw ValidationError.validationError("client_id should not be nil")
+    }
+    
+    guard
+      let aud = getValueForKey(
+        from: jwt,
+        key: AUD
+      ) as? String,
+      aud == expectedWalletAudience
+    else {
+      throw ValidationError.validationError("Invalid aud value, should be: \(expectedWalletAudience ?? "")")
     }
     
     let id = try? VerifierId.parse(clientId: jwsClientID).get()
