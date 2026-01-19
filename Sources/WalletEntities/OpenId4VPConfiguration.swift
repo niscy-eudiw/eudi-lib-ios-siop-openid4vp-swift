@@ -15,8 +15,11 @@
  */
 @preconcurrency import Foundation
 
+public typealias Issuer = URL
+
 public struct OpenId4VPConfiguration: Sendable {
   public let privateKey: SecKey
+  public let issuer: Issuer?
   public let publicWebKeySet: WebKeySet
   public let supportedClientIdSchemes: [SupportedClientIdPrefix]
   public let vpFormatsSupported: [ClaimFormat]
@@ -26,8 +29,11 @@ public struct OpenId4VPConfiguration: Sendable {
   public let session: Networking
   public let responseEncryptionConfiguration: ResponseEncryptionConfiguration
   
+  public static let SelfIssued = Issuer(string: "https://self-issued.me/v2")
+  
   public init(
     privateKey: SecKey,
+    issuer: Issuer? = Self.SelfIssued,
     publicWebKeySet: WebKeySet,
     supportedClientIdSchemes: [SupportedClientIdPrefix],
     vpFormatsSupported: [ClaimFormat] = ClaimFormat.default(),
@@ -38,6 +44,7 @@ public struct OpenId4VPConfiguration: Sendable {
     responseEncryptionConfiguration: ResponseEncryptionConfiguration
   ) {
     self.privateKey = privateKey
+    self.issuer = issuer
     self.publicWebKeySet = publicWebKeySet
     self.supportedClientIdSchemes = supportedClientIdSchemes
     self.vpFormatsSupported = vpFormatsSupported
@@ -50,6 +57,7 @@ public struct OpenId4VPConfiguration: Sendable {
 
   internal init() throws {
     privateKey = try KeyController.generateRSAPrivateKey()
+    issuer = OpenId4VPConfiguration.SelfIssued
     publicWebKeySet = WebKeySet(keys: [])
     supportedClientIdSchemes = []
     vpFormatsSupported = []
