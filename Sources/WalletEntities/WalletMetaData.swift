@@ -36,6 +36,10 @@ public func walletMetaData(
   json[RESPONSE_TYPES_SUPPORTED] = JSON(["vp_token"])
   json[RESPONSE_MODES_SUPPORTED] = JSON(["direct_post", "direct_post.jwt"])
 
+  if let issuer = config.issuer?.absoluteString {
+    json[ISSUER] = JSON(issuer)
+  }
+  
   if let options: PostOptions = config.jarConfiguration.supportedRequestUriMethods.isPostSupported() {
     switch options.jarEncryption {
     case .notRequired: break
@@ -106,6 +110,9 @@ private let CONTENT_TYPE_JWT = "JWT"
 internal let RESPONSE_ENCRYPTION_METHODS_SUPPORTED: String = "encrypted_response_enc_values_supported"
 internal let RESPONSE_ENCRYPTION_METHODS_SUPPORTED_DEFAULT: String = "A128GCM"
 internal let DEFAULT_RESPONSE_ENCRYPTION_METHODS: [EncryptionMethod] = [EncryptionMethod.parse(RESPONSE_ENCRYPTION_METHODS_SUPPORTED_DEFAULT), .init(name: "A128CBC-HS256")]
+
+internal let ISSUER = "issuer"
+internal let AUD = "aud"
 
 private extension JWKSet {
   func toJSON() -> JSON? {
