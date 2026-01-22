@@ -16,6 +16,10 @@
 import Foundation
 import XCTest
 import JOSESwift
+import SwiftCBOR
+import MdocDataModel18013
+import MdocSecurity18013
+import MdocDataTransfer18013
 
 @testable import OpenID4VP
 
@@ -333,10 +337,38 @@ final class DirectPostJWTTests: DiXCTest {
     
     switch result {
     case .jwt(request: let request):
+      // create session transcript
+      		let vp = request.request
+		var jwkThumbprint: Data?  = nil
+    var eReaderPub: CoseKey? = nil
+		if let key = vp.clientMetaData?.jwkSet?.keys.first(where: { $0.use == "enc"}),
+			let x = key.x, let xd = Data(base64URLEncoded: x),
+			let y = key.y, let yd = Data(base64URLEncoded: y),
+			let crv = key.crv,
+			let crvType = MdocDataModel18013.CoseEcCurve(crvName: crv),
+			let ecCrvType = ECCurveType(rawValue: crv) {
+			eReaderPub = CoseKey(x: [UInt8](xd), y: [UInt8](yd), crv: crvType)
+			// Generate a jwkThumbprint if possible.
+			let publicKey = ECPublicKey(crv: ecCrvType, x: x , y: y)
+			jwkThumbprint = (try? publicKey.thumbprint(algorithm: .SHA256)).flatMap { Data(base64URLEncoded: $0) }
+		}
+		// Add support for directPost.
+		let responseUri = if case .directPostJWT(let uri) = vp.responseMode { uri.absoluteString } else if case .directPost(let uri) = vp.responseMode { uri.absoluteString } else { "" }
+		let vpNonce = vp.nonce; let vpClientId = vp.client.id.originalClientId
+		//  mdocGeneratedNonce = generateMdocGeneratedNonce()	// Not longer required for SessionTranscript, use the verifier (client) nonce i.e vpNonce
+		let sessionTranscript = SessionTranscript(handOver: generateOpenId4VpHandover(clientId: vpClientId, responseUri: responseUri, nonce: vpNonce, jwkThumbprint: jwkThumbprint?.byteArray))
+      // create vp token to send (device response)
+      let docId = "test-doc-id"
+      let requestItems = [docId: ["eu.europa.ec.eudi.pid.1": EuPidModel.pidMandatoryElementKeys.map(RequestItem.init)]]
+      let issuerSignedMap = [docId: try IssuerSigned(data: Data(base64URLEncoded: TestsConstants.cbor_issuer_signed)!.byteArray)]
+      let privateKeysMap = [docId: CoseKeyPrivate(p256: TestsConstants.privateKey_x963, privateKeyId: docId)!]
+      let deviceResponse = (try await MdocHelpers.getDeviceResponseToSend(deviceRequest: nil, issuerSigned: issuerSignedMap, docMetadata: [:], selectedItems: requestItems, eReaderKey: eReaderPub, privateKeyObjects: privateKeysMap, sessionTranscript: sessionTranscript, dauthMethod: .deviceMac, unlockData: [:]))!.deviceResponse
+      let vpTokenData = Data(deviceResponse.toCBOR(options: CBOROptions()).encode())
+		  let vpTokenStr = vpTokenData.base64URLEncodedString()
       // Obtain consent
       let consent: ClientConsent = .vpToken(
         vpContent: .dcql(verifiablePresentations: [
-          try QueryId(value: "query_0"): [.generic(TestsConstants.cbor)]
+          try QueryId(value: "query_0"): [.generic(vpTokenStr)]
         ])
       )
       

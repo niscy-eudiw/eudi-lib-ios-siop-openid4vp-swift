@@ -36,6 +36,7 @@ let package = Package(
       url: "https://github.com/SwiftyJSON/SwiftyJSON.git",
       from: "5.0.1"
     ),
+    .package(url: "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-iso18013-data-transfer.git", exact: "0.8.5"),
   ],
   targets: [
     .target(
@@ -83,6 +84,7 @@ let package = Package(
           name: "SwiftyJSON",
           package: "SwiftyJSON"
         ),
+        .product(name: "MdocDataTransfer18013", package: "eudi-lib-ios-iso18013-data-transfer"),
       ],
       path: "Tests"
     )
