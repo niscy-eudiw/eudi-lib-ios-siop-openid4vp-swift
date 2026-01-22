@@ -355,16 +355,18 @@ final class DirectPostJWTTests: DiXCTest {
 		// Add support for directPost.
 		let responseUri = if case .directPostJWT(let uri) = vp.responseMode { uri.absoluteString } else if case .directPost(let uri) = vp.responseMode { uri.absoluteString } else { "" }
 		let vpNonce = vp.nonce; let vpClientId = vp.client.id.originalClientId
-		//  mdocGeneratedNonce = generateMdocGeneratedNonce()	// Not longer required for SessionTranscript, use the verifier (client) nonce i.e vpNonce
+		let mdocGeneratedNonce = TestsConstants.generateMdocGeneratedNonce()	// Not longer required for SessionTranscript, use the verifier (client) nonce i.e vpNonce
 		let sessionTranscript = SessionTranscript(handOver: generateOpenId4VpHandover(clientId: vpClientId, responseUri: responseUri, nonce: vpNonce, jwkThumbprint: jwkThumbprint?.byteArray))
       // create vp token to send (device response)
       let docId = "test-doc-id"
-      let requestItems = [docId: ["eu.europa.ec.eudi.pid.1": EuPidModel.pidMandatoryElementKeys.map(RequestItem.init)]]
+      let elementItems = ["family_name"] //EuPidModel.pidMandatoryElementKeys
+let requestItems = [docId: ["eu.europa.ec.eudi.pid.1": elementItems.map(RequestItem.init)]]
       let issuerSignedMap = [docId: try IssuerSigned(data: Data(base64URLEncoded: TestsConstants.cbor_issuer_signed)!.byteArray)]
       let privateKeysMap = [docId: CoseKeyPrivate(p256: TestsConstants.privateKey_x963, privateKeyId: docId)!]
-      let deviceResponse = (try await MdocHelpers.getDeviceResponseToSend(deviceRequest: nil, issuerSigned: issuerSignedMap, docMetadata: [:], selectedItems: requestItems, eReaderKey: eReaderPub, privateKeyObjects: privateKeysMap, sessionTranscript: sessionTranscript, dauthMethod: .deviceMac, unlockData: [:]))!.deviceResponse
+      let deviceResponse = (try await MdocHelpers.getDeviceResponseToSend(deviceRequest: nil, issuerSigned: issuerSignedMap, docMetadata: [:], selectedItems: requestItems, eReaderKey: eReaderPub, privateKeyObjects: privateKeysMap, sessionTranscript: sessionTranscript, dauthMethod: .deviceSignature, unlockData: [:]))!.deviceResponse
       let vpTokenData = Data(deviceResponse.toCBOR(options: CBOROptions()).encode())
 		  let vpTokenStr = vpTokenData.base64URLEncodedString()
+      print(vpTokenStr)
       // Obtain consent
       let consent: ClientConsent = .vpToken(
         vpContent: .dcql(verifiablePresentations: [
@@ -376,7 +378,8 @@ final class DirectPostJWTTests: DiXCTest {
       let response = try? XCTUnwrap(AuthorizationResponse(
         resolvedRequest: request,
         consent: consent,
-        walletOpenId4VPConfig: wallet
+        walletOpenId4VPConfig: wallet,
+        encryptionParameters: .apu(mdocGeneratedNonce.base64urlEncode)
       ), "Expected item to be non-nil")
       
       // Dispatch
