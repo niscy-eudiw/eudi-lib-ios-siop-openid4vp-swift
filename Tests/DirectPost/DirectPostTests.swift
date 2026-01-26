@@ -207,7 +207,10 @@ final class DirectPostTests: DiXCTest {
       // Dispatch
       XCTAssertNotNil(response)
       
-      let result: DispatchOutcome = try await sdk.dispatch(response: response!)
+      let result: DispatchOutcome = try await sdk.dispatch(
+        session: NetworkingMock(json: .init([:]), statusCode: 200),
+        response: response!
+      )
       switch result {
       case .accepted:
         XCTAssert(true)
