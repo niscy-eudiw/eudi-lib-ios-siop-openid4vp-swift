@@ -98,7 +98,7 @@ final class DirectPostJWTTests: DiXCTest {
       XCTAssertNotNil(response)
       
       let result: DispatchOutcome = try await sdk.dispatch(
-        session: NetworkingMock(json: .init([:])),
+        session: NetworkingMock(json: .init([:]), statusCode: 200),
         response: response!
       )
       
@@ -354,7 +354,7 @@ final class DirectPostJWTTests: DiXCTest {
       XCTAssertNotNil(response)
       
       let result: DispatchOutcome = try await sdk.dispatch(
-        session: NetworkingMock(json: .init([:])),
+        session: NetworkingMock(json: .init([:]), statusCode: 200),
         response: response!
       )
       switch result {
@@ -724,7 +724,7 @@ final class DirectPostJWTTests: DiXCTest {
       XCTAssertNotNil(response)
       
       let result: DispatchOutcome = try await sdk.dispatch(
-        session: NetworkingMock(json: .init([:])),
+        session: NetworkingMock(json: .init([:]), statusCode: 200),
         response: response!)
       switch result {
       case .accepted:
@@ -936,7 +936,7 @@ final class DirectPostJWTTests: DiXCTest {
       XCTAssertNotNil(response)
       
       let result: DispatchOutcome = try await sdk.dispatch(
-        session: NetworkingMock(json: .init([:])),
+        session: NetworkingMock(json: .init([:]), statusCode: 200),
         response: response!
       )
       switch result {
@@ -1224,7 +1224,7 @@ final class DirectPostJWTTests: DiXCTest {
       XCTAssertNotNil(response)
       
       let result: DispatchOutcome = try await sdk.dispatch(
-        session: NetworkingMock(json: .init([:])),
+        session: NetworkingMock(json: .init([:]), statusCode: 200),
         response: response!
       )
       switch result {

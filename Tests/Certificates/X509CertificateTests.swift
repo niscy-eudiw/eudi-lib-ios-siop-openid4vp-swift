@@ -171,6 +171,7 @@ final class X509CertificateTests: XCTestCase {
       leafBase64Certificate: certs.first!,
       showDiagnostics: true
     ) else {
+      XCTExpectFailure()
       XCTFail("Expected .validCertificate, got nil")
       return
     }
