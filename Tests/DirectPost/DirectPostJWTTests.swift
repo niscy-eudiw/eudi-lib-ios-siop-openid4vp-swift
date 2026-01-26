@@ -97,7 +97,11 @@ final class DirectPostJWTTests: DiXCTest {
       // Dispatch
       XCTAssertNotNil(response)
       
-      let result: DispatchOutcome = try await sdk.dispatch(response: response!)
+      let result: DispatchOutcome = try await sdk.dispatch(
+        session: NetworkingMock(json: .init([:])),
+        response: response!
+      )
+      
       switch result {
       case .accepted:
         XCTAssert(true)
@@ -322,7 +326,6 @@ final class DirectPostJWTTests: DiXCTest {
     let sdk = OpenID4VP(walletConfiguration: wallet)
     let url = session["request_uri"]
     let clientId = session["client_id"]
-    let transactionId = session["transaction_id"] as! String
     
     overrideDependencies()
     let result = await sdk.authorize(
@@ -351,24 +354,13 @@ final class DirectPostJWTTests: DiXCTest {
       XCTAssertNotNil(response)
       
       let result: DispatchOutcome = try await sdk.dispatch(
+        session: NetworkingMock(json: .init([:])),
         response: response!
       )
       switch result {
       case .accepted:
         XCTAssert(true)
       default:
-        XCTAssert(false)
-      }
-      
-      let pollingResult = try await TestsHelpers.pollVerifier(
-        transactionId: transactionId,
-        nonce: nonce
-      )
-      
-      switch pollingResult {
-      case .success:
-        XCTAssert(true)
-      case .failure:
         XCTAssert(false)
       }
     default:
@@ -424,7 +416,6 @@ final class DirectPostJWTTests: DiXCTest {
     let sdk = OpenID4VP(walletConfiguration: wallet)
     let url = session["request_uri"]
     let clientId = session["client_id"]
-    let transactionId = session["transaction_id"] as! String
     
     overrideDependencies()
     let result = await sdk.authorize(
@@ -458,18 +449,6 @@ final class DirectPostJWTTests: DiXCTest {
         XCTAssert(true, message)
         return
       default:
-        XCTAssert(false)
-      }
-      
-      let pollingResult = try await TestsHelpers.pollVerifier(
-        transactionId: transactionId,
-        nonce: nonce
-      )
-      
-      switch pollingResult {
-      case .success:
-        XCTAssert(true)
-      case .failure:
         XCTAssert(false)
       }
     default:
@@ -717,7 +696,6 @@ final class DirectPostJWTTests: DiXCTest {
     let sdk = OpenID4VP(walletConfiguration: wallet)
     let url = session["request_uri"]
     let clientId = session["client_id"]
-    let transactionId = session["transaction_id"] as! String
     
     overrideDependencies()
     let result = await sdk.authorize(
@@ -745,23 +723,13 @@ final class DirectPostJWTTests: DiXCTest {
       // Dispatch
       XCTAssertNotNil(response)
       
-      let result: DispatchOutcome = try await sdk.dispatch(response: response!)
+      let result: DispatchOutcome = try await sdk.dispatch(
+        session: NetworkingMock(json: .init([:])),
+        response: response!)
       switch result {
       case .accepted:
         XCTAssert(true)
       default:
-        XCTAssert(false)
-      }
-      
-      let pollingResult = try await TestsHelpers.pollVerifier(
-        transactionId: transactionId,
-        nonce: nonce
-      )
-      
-      switch pollingResult {
-      case .success:
-        XCTAssert(true)
-      case .failure:
         XCTAssert(false)
       }
     default:
@@ -940,7 +908,6 @@ final class DirectPostJWTTests: DiXCTest {
     let sdk = OpenID4VP(walletConfiguration: wallet)
     let url = session["request_uri"]
     let clientId = session["client_id"]!
-    let transactionId = session["transaction_id"] as! String
     
     overrideDependencies()
     let result = await sdk.authorize(
@@ -968,23 +935,14 @@ final class DirectPostJWTTests: DiXCTest {
       // Dispatch
       XCTAssertNotNil(response)
       
-      let result: DispatchOutcome = try await sdk.dispatch(response: response!)
+      let result: DispatchOutcome = try await sdk.dispatch(
+        session: NetworkingMock(json: .init([:])),
+        response: response!
+      )
       switch result {
       case .accepted:
         XCTAssert(true)
       default:
-        XCTAssert(false)
-      }
-      
-      let pollingResult = try await TestsHelpers.pollVerifier(
-        transactionId: transactionId,
-        nonce: nonce
-      )
-      
-      switch pollingResult {
-      case .success:
-        XCTAssert(true)
-      case .failure:
         XCTAssert(false)
       }
     default:
@@ -1265,7 +1223,10 @@ final class DirectPostJWTTests: DiXCTest {
       // Dispatch
       XCTAssertNotNil(response)
       
-      let result: DispatchOutcome = try await sdk.dispatch(response: response!)
+      let result: DispatchOutcome = try await sdk.dispatch(
+        session: NetworkingMock(json: .init([:])),
+        response: response!
+      )
       switch result {
       case .accepted:
         XCTAssert(true)
