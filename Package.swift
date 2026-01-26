@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
   name: "OpenID4VP",
-  platforms: [.iOS(.v14), .macOS(.v12)],
+  platforms: [.iOS(.v15), .macOS(.v12)],
   products: [
     .library(
       name: "OpenID4VP",
@@ -36,7 +36,6 @@ let package = Package(
       url: "https://github.com/SwiftyJSON/SwiftyJSON.git",
       from: "5.0.1"
     ),
-    .package(url: "https://github.com/eu-digital-identity-wallet/eudi-lib-ios-iso18013-data-transfer.git", exact: "0.8.5"),
   ],
   targets: [
     .target(
@@ -83,8 +82,7 @@ let package = Package(
         .product(
           name: "SwiftyJSON",
           package: "SwiftyJSON"
-        ),
-        .product(name: "MdocDataTransfer18013", package: "eudi-lib-ios-iso18013-data-transfer"),
+        )
       ],
       path: "Tests"
     )
