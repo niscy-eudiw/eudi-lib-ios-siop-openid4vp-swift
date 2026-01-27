@@ -58,13 +58,13 @@ public actor InMemoryP256SecureArea: SecureArea {
     public func deleteKeyInfo(id: String) async throws {  }
     
     public func signature(id: String, index: Int, algorithm: MdocDataModel18013.SigningAlgorithm, dataToSign: Data, unlockData: Data?) throws -> Data {
-        key = if let x963Key { try P256.Signing.PrivateKey(x963Representation: x963Key) } else { P256.Signing.PrivateKey() }
+        key = if let x963Key { try P256.Signing.PrivateKey(x963Representation: x963Key) } else { throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey : "Private key not found"]) }
        let signature = try key.signature(for: dataToSign)
         return signature.rawRepresentation
     }
     
     public func keyAgreement(id: String, index: Int, publicKey: MdocDataModel18013.CoseKey, unlockData: Data?) throws -> SharedSecret {
-        key = if let x963Key { try P256.Signing.PrivateKey(x963Representation: x963Key) } else { P256.Signing.PrivateKey() }
+        key = if let x963Key { try P256.Signing.PrivateKey(x963Representation: x963Key) } else { throw NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey : "Private key not found"]) }
        let puk256 = try P256.KeyAgreement.PublicKey(x963Representation: publicKey.getx963Representation())
         let prk256 = try P256.KeyAgreement.PrivateKey(x963Representation: key.x963Representation)
         let sharedSecret = try prk256.sharedSecretFromKeyAgreement(with: puk256)
@@ -79,21 +79,37 @@ public actor InMemoryP256SecureArea: SecureArea {
 
 public actor DummySecureKeyStorage: MdocDataModel18013.SecureKeyStorage {
     public func readKeyInfo(id: String) throws -> [String : Data] {
-        [:]
+		print("DummySecureKeyStorage.readKeyInfo called")
+        return [:]
     }
     
     public func readKeyData(id: String, index: Int) throws -> [String : Data] {
-        [:]
+		print("DummySecureKeyStorage.readKeyData called")
+        return [:]
     }
     
-    public func writeKeyInfo(id: String, dict: [String : Data]) throws {  }
+    public func writeKeyInfo(id: String, dict: [String : Data]) throws { 
+		print("DummySecureKeyStorage.writeKeyInfo called")
+	 }
     
-    public func writeKeyDataBatch(id: String, startIndex: Int, dicts: [[String: Data]], keyOptions: KeyOptions?) async throws { }
+    public func writeKeyDataBatch(id: String, startIndex: Int, dicts: [[String: Data]], keyOptions: KeyOptions?) async throws {
+		print("DummySecureKeyStorage.writeKeyDataBatch called")
+	 }
     
-    public func deleteKeyBatch(id: String, startIndex: Int, batchSize: Int) throws { }
+    public func deleteKeyBatch(id: String, startIndex: Int, batchSize: Int) throws { 
+		print("DummySecureKeyStorage.deleteKeyBatch called")
+	}
     
-    public func deleteKeyInfo(id: String) async throws {  }
+    public func deleteKeyInfo(id: String) async throws { 
+		
+	 }
     
+}
+
+extension MdocDataModel18013.CoseKey {
+	var x963Representation: Data {
+		Data([0x04] + x + y)
+	}
 }
 
 extension MdocDataModel18013.CoseKeyPrivate {
@@ -118,7 +134,7 @@ extension CoseEcCurve {
 	}
 }
 
-func generateOpenId4VpHandover(clientId: String,	responseUri: String, nonce: String, jwkThumbprint: [UInt8]? = nil) -> CBOR {
+func generateOpenId4VpHandover(clientId: String, responseUri: String, nonce: String, jwkThumbprint: [UInt8]? = nil) -> CBOR {
     let jwkThumbprintCbor: CBOR = jwkThumbprint != nil ? .byteString(jwkThumbprint!) : .null
     let openID4VPHandoverInfoToHash = CBOR.array([.utf8String(clientId), .utf8String(nonce), jwkThumbprintCbor, .utf8String(responseUri)])
     let	openID4VPHandoverInfo = [UInt8](SHA256.hash(data: openID4VPHandoverInfoToHash.asData()))

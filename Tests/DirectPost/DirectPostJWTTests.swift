@@ -17,6 +17,7 @@ import Foundation
 import XCTest
 import JOSESwift
 import SwiftCBOR
+import CryptoKit
 import MdocDataModel18013
 import MdocSecurity18013
 import MdocDataTransfer18013
@@ -358,15 +359,18 @@ final class DirectPostJWTTests: DiXCTest {
 		let mdocGeneratedNonce = TestsConstants.generateMdocGeneratedNonce()	// Not longer required for SessionTranscript, use the verifier (client) nonce i.e vpNonce
 		let sessionTranscript = SessionTranscript(handOver: generateOpenId4VpHandover(clientId: vpClientId, responseUri: responseUri, nonce: vpNonce, jwkThumbprint: jwkThumbprint?.byteArray))
       // create vp token to send (device response)
-      let docId = "test-doc-id"
+	  let iss = try IssuerSigned(data: Data(base64URLEncoded: TestsConstants.cbor_issuer_signed)!.byteArray)
+	  let privKey = try CryptoKit.P256.Signing.PrivateKey(x963Representation: Data(base64Encoded: TestsConstants.privateKey_x963)!)
+	  let publicKey = privKey.publicKey
+      XCTAssert(iss.issuerAuth.mso.deviceKeyInfo.deviceKey.x963Representation.byteArray == publicKey.x963Representation.byteArray, "Device key in MSO does not match the private key used to sign the issuer signed")
+	  let docId = "test-doc-id"
       let elementItems = ["family_name"] //EuPidModel.pidMandatoryElementKeys
-let requestItems = [docId: ["eu.europa.ec.eudi.pid.1": elementItems.map(RequestItem.init)]]
-      let issuerSignedMap = [docId: try IssuerSigned(data: Data(base64URLEncoded: TestsConstants.cbor_issuer_signed)!.byteArray)]
+	let requestItems = [docId: ["eu.europa.ec.eudi.pid.1": elementItems.map(RequestItem.init)]]
+      let issuerSignedMap = [docId: iss]
       let privateKeysMap = [docId: CoseKeyPrivate(p256: TestsConstants.privateKey_x963, privateKeyId: docId)!]
       let deviceResponse = (try await MdocHelpers.getDeviceResponseToSend(deviceRequest: nil, issuerSigned: issuerSignedMap, docMetadata: [:], selectedItems: requestItems, eReaderKey: eReaderPub, privateKeyObjects: privateKeysMap, sessionTranscript: sessionTranscript, dauthMethod: .deviceSignature, unlockData: [:]))!.deviceResponse
       let vpTokenData = Data(deviceResponse.toCBOR(options: CBOROptions()).encode())
-		  let vpTokenStr = vpTokenData.base64URLEncodedString()
-      print(vpTokenStr)
+	  let vpTokenStr = vpTokenData.base64URLEncodedString()
       // Obtain consent
       let consent: ClientConsent = .vpToken(
         vpContent: .dcql(verifiablePresentations: [
