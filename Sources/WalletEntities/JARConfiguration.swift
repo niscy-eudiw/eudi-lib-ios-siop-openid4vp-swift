@@ -26,6 +26,7 @@ public struct JARConfiguration: Sendable {
     supportedRequestUriMethods: SupportedRequestUriMethod
   ) {
     precondition(!supportedAlgorithms.isEmpty, "JAR signing algorithms cannot be empty")
+
     self.supportedAlgorithms = supportedAlgorithms
     self.supportedRequestUriMethods = supportedRequestUriMethods
   }
