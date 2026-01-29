@@ -66,10 +66,20 @@ internal actor RequestFetcher {
     case .GET:
       let jwt = try await getJwtViaGET(
         config: config,
+        clientId: clientId,
         requestUrl: requestUrl
       )
       return (jwt, nil)
     case .POST:
+      if config?.jarConfiguration.supportedRequestUriMethods.isPostSupported() == nil {
+        let jwt = try await getJwtViaGET(
+          config: config,
+          clientId: clientId,
+          requestUrl: requestUrl
+        )
+        return (jwt, nil)
+      }
+        
       let (jwt, nonce) = try await getJwtViaPOST(
         config: config,
         requestUrl: requestUrl,
@@ -81,14 +91,25 @@ internal actor RequestFetcher {
   
   private func getJwtViaGET(
     config: OpenId4VPConfiguration?,
+    clientId: String?,
     requestUrl: URL
   ) async throws -> String {
-    return try await getJwtString(
+    let jwt = try await getJwtString(
       fetcher: Fetcher(
         session: config?.session ?? URLSession.shared
       ),
       requestUrl: requestUrl
     )
+    
+    let expectedWalletAudience: String? = OpenId4VPConfiguration.SelfIssued?.absoluteString
+    try config?.ensureJWTValid(
+      expectedClient: clientId,
+      expectedWalletNonce: nil,
+      expectedWalletAudience: expectedWalletAudience,
+      jwt: jwt
+    )
+    
+    return jwt
   }
   
   fileprivate struct ResultType: Codable {}
@@ -141,15 +162,18 @@ internal actor RequestFetcher {
     )
     
     let finalJwt = try decryptIfNeeded(
+      config: config,
       jwt: jwt,
-      keyManagementAlgorithm: config?.jarConfiguration.supportedEncryption?.supportedEncryptionAlgorithm,
-      contentEncryptionAlgorithm: config?.jarConfiguration.supportedEncryption?.supportedEncryptionMethod,
       keys: keys
     )
     
-    try config?.ensureValid(
+    let expectedWalletAudience: String? = walletMetadata != nil
+      ? config?.issuer?.absoluteString
+      : OpenId4VPConfiguration.SelfIssued?.absoluteString
+    try config?.ensureJWTValid(
       expectedClient: clientId,
       expectedWalletNonce: nonce,
+      expectedWalletAudience: expectedWalletAudience,
       jwt: finalJwt
     )
     
@@ -232,36 +256,65 @@ internal actor RequestFetcher {
   }
   
   private func decryptIfNeeded(
+    config: OpenId4VPConfiguration?,
     jwt: String,
-    keyManagementAlgorithm: KeyManagementAlgorithm?,
-    contentEncryptionAlgorithm: ContentEncryptionAlgorithm?,
     keys: (key: SecKey, jwk: ECPrivateKey)?
   ) throws -> String {
     guard let jwk = keys?.jwk else {
       return jwt
     }
     
-    guard let keyManagementAlgorithm, let contentEncryptionAlgorithm else {
-      throw AuthorizationError.invalidAlgorithms
-    }
-    
     do {
       let encryptedJwe = try JWE(compactSerialization: jwt)
+        
+      let supportedEncryptionAlgorithms: [KeyManagementAlgorithm] = config?.responseEncryptionConfiguration.supportedAlgorithms.compactMap { algorithm in
+          return KeyManagementAlgorithm(algorithm: algorithm)
+      } ?? []
+      
+      guard let headerKeyManagementAlgorithm = encryptedJwe.header.keyManagementAlgorithm else {
+        throw ValidationError.validationError(
+          "JWE header does not contain key management algorithm"
+        )
+      }
+      
+      if !supportedEncryptionAlgorithms.contains(headerKeyManagementAlgorithm) {
+        throw ValidationError.validationError(
+          "JWEObject must contain a supported encryption algorithm"
+        )
+      }
+      
+      let supportedEncryptionMethods: [ContentEncryptionAlgorithm] = config?.responseEncryptionConfiguration.supportedMethods.compactMap { method in
+        return ContentEncryptionAlgorithm(encryptionMethod: method)
+      } ?? []
+      
+      guard let headerContentEncryptionAlgorithm = encryptedJwe.header.contentEncryptionAlgorithm else {
+        throw ValidationError.validationError(
+          "JWE header does not contain key management algorithm"
+        )
+      }
+      
+      if !supportedEncryptionMethods.contains(headerContentEncryptionAlgorithm) {
+        throw ValidationError.validationError(
+          "JWEObject must contain a supported encryption method"
+        )
+      }
+        
       guard let decrypter = Decrypter(
-        keyManagementAlgorithm: keyManagementAlgorithm,
-        contentEncryptionAlgorithm: contentEncryptionAlgorithm,
+        keyManagementAlgorithm: headerKeyManagementAlgorithm,
+        contentEncryptionAlgorithm: headerContentEncryptionAlgorithm,
         decryptionKey: jwk
       ) else {
         throw AuthorizationError.jwtDecryptionFailed
       }
       
       let payloadData = try encryptedJwe.decrypt(using: decrypter).data()
-      guard let decoded = payloadData.base64EncodedString().base64Decoded(),
-            let jwtString = String(data: decoded, encoding: .utf8) else {
+      guard
+        let decoded = payloadData.base64EncodedString().base64Decoded(),
+        let jwtString = String(data: decoded, encoding: .utf8) else {
         throw AuthorizationError.jwtDecryptionFailed
       }
-      
       return jwtString
+      
     } catch {
       return jwt
     }
@@ -291,9 +344,10 @@ internal actor RequestFetcher {
 
 internal extension OpenId4VPConfiguration {
   
-  func ensureValid(
+  func ensureJWTValid(
     expectedClient: String?,
     expectedWalletNonce: String?,
+    expectedWalletAudience: String?,
     jwt: JWTString
   ) throws {
     
@@ -308,6 +362,16 @@ internal extension OpenId4VPConfiguration {
       key: "client_id"
     ) as? String else {
       throw ValidationError.validationError("client_id should not be nil")
+    }
+    
+    guard
+      let aud = getValueForKey(
+        from: jwt,
+        key: AUD
+      ) as? String,
+      aud == expectedWalletAudience
+    else {
+      throw ValidationError.validationError("Invalid aud value, should be: \(expectedWalletAudience ?? "")")
     }
     
     let id = try? VerifierId.parse(clientId: jwsClientID).get()

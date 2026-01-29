@@ -41,7 +41,6 @@ internal class FormURLEncoder {
       throw ValidationError.validationError("")
     }
     guard let encodedValue = encoded(any: value) else {
-      let unsupportedValue: String = (value as? String) ?? ""
       throw ValidationError.validationError("")
     }
     to.append(encodedName)

@@ -71,7 +71,7 @@ public struct VerifierId: Sendable {
         let originalClientId = String(parts[1])
 
         guard let scheme = ClientIdPrefix(rawValue: schemeString) else {
-          throw invalid("'\(clientId)' does not contain a valid Client ID Scheme")
+          return VerifierId(scheme: .preRegistered, originalClientId: clientId)
         }
 
         switch scheme {

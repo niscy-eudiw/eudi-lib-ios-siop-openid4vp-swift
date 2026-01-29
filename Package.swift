@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
   name: "OpenID4VP",
-  platforms: [.iOS(.v14), .macOS(.v12)],
+  platforms: [.iOS(.v15), .macOS(.v12)],
   products: [
     .library(
       name: "OpenID4VP",
@@ -82,7 +82,7 @@ let package = Package(
         .product(
           name: "SwiftyJSON",
           package: "SwiftyJSON"
-        ),
+        )
       ],
       path: "Tests"
     )

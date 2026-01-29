@@ -36,6 +36,10 @@ public func walletMetaData(
   json[RESPONSE_TYPES_SUPPORTED] = JSON(["vp_token"])
   json[RESPONSE_MODES_SUPPORTED] = JSON(["direct_post", "direct_post.jwt"])
 
+  if let issuer = config.issuer?.absoluteString {
+    json[ISSUER] = JSON(issuer)
+  }
+  
   if let options: PostOptions = config.jarConfiguration.supportedRequestUriMethods.isPostSupported() {
     switch options.jarEncryption {
     case .notRequired: break
@@ -56,12 +60,28 @@ public func walletMetaData(
          publicJwk["crv"] == encryptionRequirementSpecification.ephemeralEncryptionKeyCurve.rawValue {
 
         json[JWKS] = jwkJson
-        json[AUTHORIZATION_ENCRYPTION_ALG_VALUES_SUPPORTED] = JSON(
+        json[REQUEST_OBJECT_ENCRYPTION_ALG_VALUES_SUPPORTED] = JSON(
           [encryptionRequirementSpecification.supportedEncryptionAlgorithm.rawValue]
         )
-        json[AUTHORIZATION_ENCRYPTION_ENC_VALUES_SUPPORTED] = JSON(
+        json[REQUEST_OBJECT_ENCRYPTION_ENC_VALUES_SUPPORTED] = JSON(
           [encryptionRequirementSpecification.supportedEncryptionMethod.rawValue]
         )
+        
+        // Response Encryption
+        let responseEncryptionConfiguration = config.responseEncryptionConfiguration
+        switch responseEncryptionConfiguration {
+        case .supported(
+          let supportedAlgorithms,
+          let supportedMethods
+        ):
+          json[AUTHORIZATION_ENCRYPTION_ALG_VALUES_SUPPORTED] = JSON(
+            supportedAlgorithms.map { $0.name }
+          )
+          json[AUTHORIZATION_ENCRYPTION_ENC_VALUES_SUPPORTED] = JSON(
+            supportedMethods.map { $0.name }
+          )
+        default: break
+        }
       }
     }
   }
@@ -71,8 +91,13 @@ public func walletMetaData(
 
 private let REQUEST_OBJECT_SIGNING_ALG_VALUES_SUPPORTED = "request_object_signing_alg_values_supported"
 private let AUTHORIZATION_SIGNING_ALG_VALUES_SUPPORTED = "authorization_signing_alg_values_supported"
+
 private let AUTHORIZATION_ENCRYPTION_ALG_VALUES_SUPPORTED = "authorization_encryption_alg_values_supported"
 private let AUTHORIZATION_ENCRYPTION_ENC_VALUES_SUPPORTED = "authorization_encryption_enc_values_supported"
+
+private let REQUEST_OBJECT_ENCRYPTION_ALG_VALUES_SUPPORTED = "request_object_encryption_alg_values_supported"
+private let REQUEST_OBJECT_ENCRYPTION_ENC_VALUES_SUPPORTED = "request_object_encryption_enc_values_supported"
+
 private let PRESENTATION_DEFINITION_URI_SUPPORTED = "presentation_definition_uri_supported"
 private let CLIENT_ID_SCHEMES_SUPPORTED = "client_id_schemes_supported"
 private let CLIENT_ID_PREFIXES_SUPPORTED = "client_id_prefixes_supported"
@@ -85,6 +110,9 @@ private let CONTENT_TYPE_JWT = "JWT"
 internal let RESPONSE_ENCRYPTION_METHODS_SUPPORTED: String = "encrypted_response_enc_values_supported"
 internal let RESPONSE_ENCRYPTION_METHODS_SUPPORTED_DEFAULT: String = "A128GCM"
 internal let DEFAULT_RESPONSE_ENCRYPTION_METHODS: [EncryptionMethod] = [EncryptionMethod.parse(RESPONSE_ENCRYPTION_METHODS_SUPPORTED_DEFAULT), .init(name: "A128CBC-HS256")]
+
+internal let ISSUER = "issuer"
+internal let AUD = "aud"
 
 private extension JWKSet {
   func toJSON() -> JSON? {

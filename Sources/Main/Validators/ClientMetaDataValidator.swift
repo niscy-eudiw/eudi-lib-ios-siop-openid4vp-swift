@@ -123,6 +123,15 @@ private extension ClientMetaDataValidator {
       _,
       _
     ):
+      let supportedAlgorithms: [JWEAlgorithm] = walletConfiguration.supportedAlgorithms
+      if !supportedAlgorithms.contains(where: { algorithm in
+        algorithm == .init(.ECDH_ES)
+      }) {
+        throw ValidationError.validationError(
+          "ECDH-ES must be supported"
+        )
+      }
+        
       guard let (encryptionAlgorithm, encryptionKey) = walletConfiguration.supportedAlgorithms.compactMap({ supportedAlgorithm -> (JWEAlgorithm, WebKeySet.Key)? in
         if let encryptionKey = verifierCandidateEncryptionKeys.keys.first(where: { key in
           supportedAlgorithm.name == key.alg
@@ -163,6 +172,15 @@ private extension ClientMetaDataValidator {
       if methods.isEmpty {
         throw ValidationError.validationError(
           "\(RESPONSE_ENCRYPTION_METHODS_SUPPORTED) must not be empty"
+        )
+      }
+        
+      if !methods.contains(where: { method in
+        method.name == EncryptionMethod.EncryptionMethodType.A128GCM.name ||
+        method.name == EncryptionMethod.EncryptionMethodType.A256GCM.name
+      }) {
+        throw ValidationError.validationError(
+          "At least one of A128GCM, A256GCM must be supported"
         )
       }
     }

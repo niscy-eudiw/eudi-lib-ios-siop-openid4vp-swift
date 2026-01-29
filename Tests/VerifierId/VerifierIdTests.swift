@@ -50,15 +50,20 @@ final class VerifierIdTests: XCTestCase {
   }
 
   // Test failure for invalid client ID scheme
-  func testParseInvalidClientIdScheme() {
-    let invalidClientId = "invalidScheme:exampleClientId"
+  func testParseUnknownClientFallbackIdScheme() {
+    let invalidClientId = "unknownScheme:exampleClientId"
     let result = VerifierId.parse(clientId: invalidClientId)
 
     switch result {
-    case .success:
+    case .success(let verifierId):
+      switch verifierId.scheme {
+      case .preRegistered:
+        XCTAssert(true, "Succesfully fell back to pre-registered")
+      default:
+        XCTFail("Should have fell back to pre-registered")
+      }
+    case .failure:
       XCTFail("Parsing should have failed for invalid client ID scheme")
-    case .failure(let error):
-      XCTAssert(error.localizedDescription.contains("does not contain a valid Client ID Scheme"))
     }
   }
 

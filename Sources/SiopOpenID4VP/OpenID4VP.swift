@@ -25,7 +25,7 @@ import SwiftyJSON
  */
 public protocol OpenID4VPType {
   func authorize(url: URL) async -> AuthorizationRequest
-  func dispatch(response: AuthorizationResponse) async throws -> DispatchOutcome
+  func dispatch(session: Networking?, response: AuthorizationResponse) async throws -> DispatchOutcome
   func submit()
   func consent()
 }
@@ -79,7 +79,7 @@ public class OpenID4VP: OpenID4VPType {
 
    - Returns: A DispatchOutcome enum
    */
-  public func dispatch(response: AuthorizationResponse) async throws -> DispatchOutcome {
+  public func dispatch(session: Networking? = nil, response: AuthorizationResponse) async throws -> DispatchOutcome {
 
     let dispatcher = Dispatcher(
       authorizationResponse: response
@@ -87,7 +87,7 @@ public class OpenID4VP: OpenID4VPType {
 
     return try await dispatcher.dispatch(
       poster: Poster(
-        session: walletConfiguration?.session ?? URLSession.shared
+        session: session ?? walletConfiguration?.session ?? URLSession.shared
       )
     )
   }
