@@ -41,7 +41,7 @@ platform :ios do
     end
   end
 
-  desc "Runs unit tests"
+  desc "Run unit tests"
   lane :tests do
     params = {
       package_path: '.',
