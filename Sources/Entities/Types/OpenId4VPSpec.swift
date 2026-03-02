@@ -31,6 +31,7 @@ public struct OpenId4VPSpec {
   public static let TRANSACTION_DATA_HASH_ALGORITHMS = "transaction_data_hashes_alg"
 
   public static let FORMAT_MSO_MDOC: String = "mso_mdoc"
+  public static let FORMAT_MSO_MDOC_ZK: String = "mso_mdoc_zk"
   public static let FORMAT_SD_JWT_VC: String = "dc+sd-jwt"
   public static let FORMAT_W3C_SIGNED_JWT: String = "jwt_vc_json"
 

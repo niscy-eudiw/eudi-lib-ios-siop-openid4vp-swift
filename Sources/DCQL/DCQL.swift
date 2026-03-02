@@ -263,7 +263,7 @@ public extension Credentials {
     try self.forEach { credentialQuery in
       let credentialQueryFormat = credentialQuery.format
       switch credentialQueryFormat.format {
-      case OpenId4VPSpec.FORMAT_MSO_MDOC: try credentialQuery.claims?.forEach { try _ = $0.ensureMsoMdoc() }
+      case OpenId4VPSpec.FORMAT_MSO_MDOC, OpenId4VPSpec.FORMAT_MSO_MDOC_ZK: try credentialQuery.claims?.forEach { try _ = $0.ensureMsoMdoc() }
       default: try credentialQuery.claims?.forEach { try _ = $0.ensureNotMsoMdoc() }
       }
     }
