@@ -16,34 +16,34 @@
 import Foundation
 import JOSESwift
 
-internal actor ResponseSignerEncryptor {
+internal actor ResponseEncryptor {
 
-  func signEncryptResponse(
+  func encryptResponse(
     responseEncryptionSpecification: ResponseEncryptionSpecification,
     data: AuthorizationResponsePayload
   ) throws -> String {
     return try encrypt(
       responseEncryptionAlg: responseEncryptionSpecification.responseEncryptionAlg,
       responseEncryptionEnc: responseEncryptionSpecification.responseEncryptionEnc,
-      signingKeySet: responseEncryptionSpecification.clientKey,
+      keySet: responseEncryptionSpecification.clientKey,
       data: data
     ).compactSerializedString
   }
 }
 
-private extension ResponseSignerEncryptor {
+private extension ResponseEncryptor {
 
   func encrypt(
     responseEncryptionAlg: JWEAlgorithm,
     responseEncryptionEnc: JOSEEncryptionMethod,
-    signingKeySet: WebKeySet,
+    keySet: WebKeySet,
     data: AuthorizationResponsePayload
   ) throws -> JWE {
 
     let keyAndEncryptor = try keyAndEncryptor(
       jweAlgorithm: responseEncryptionAlg,
       encryptionMethod: responseEncryptionEnc,
-      keySet: signingKeySet
+      keySet: keySet
     )
 
     let parameters: [String: Any?] = [
