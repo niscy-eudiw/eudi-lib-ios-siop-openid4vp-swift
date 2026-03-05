@@ -393,13 +393,13 @@ internal extension OpenId4VPConfiguration {
       throw ValidationError.validationError("client_id's do not match")
     }
     
-    guard let aud = getValueForKey(
+    if let aud = getValueForKey(
         from: jwt,
         key: AUD
-      ) as? String,
-      aud == expectedWalletAudience
-    else {
-      throw ValidationError.validationError("Invalid aud value, should be: \(expectedWalletAudience ?? "")")
+      ) as? String {
+      if aud != expectedWalletAudience {
+        throw ValidationError.validationError("Invalid aud value, should be: \(expectedWalletAudience ?? "")")
+      }
     }
     
     guard
