@@ -59,10 +59,10 @@ public struct VerifierId: Sendable {
         return ValidationError.validationError(message)
       }
 
-      if !clientId.contains(OpenId4VPSpec.clientIdSchemeSeparator) {
+      if clientId.contains(OpenId4VPSpec.clientIdSchemeDIDWithSeparator) {
         return VerifierId(scheme: .preRegistered, originalClientId: clientId)
 
-      } else if !clientId.contains(OpenId4VPSpec.clientIdSchemeDIDWithSeparator) {
+      } else if !clientId.contains(OpenId4VPSpec.clientIdSchemeSeparator) {
         return VerifierId(scheme: .preRegistered, originalClientId: clientId)
 
       } else {
