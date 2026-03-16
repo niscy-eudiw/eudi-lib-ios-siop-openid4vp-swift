@@ -62,6 +62,9 @@ public struct VerifierId: Sendable {
       if !clientId.contains(OpenId4VPSpec.clientIdSchemeSeparator) {
         return VerifierId(scheme: .preRegistered, originalClientId: clientId)
 
+      } else if !clientId.contains(OpenId4VPSpec.clientIdSchemeDIDWithSeparator) {
+        return VerifierId(scheme: .preRegistered, originalClientId: clientId)
+
       } else {
         let parts = clientId.split(separator: OpenId4VPSpec.clientIdSchemeSeparator, maxSplits: 1)
         guard parts.count == 2 else {
