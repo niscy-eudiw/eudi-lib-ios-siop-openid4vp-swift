@@ -69,6 +69,7 @@ public actor AccessValidator: AccessValidating {
       return switch $0 {
       case .preregistered: true
       case .redirectUri: true
+      case .decentralizedIdentifier: true
       default: false
       }
     })
@@ -95,6 +96,7 @@ public actor AccessValidator: AccessValidating {
         }
       )
     case .redirectUri: break
+    case .decentralizedIdentifier: break
     default: throw ValidationError.unsupportedClientIdScheme(nil)
     }
   }
@@ -181,7 +183,10 @@ public actor AccessValidator: AccessValidating {
 
     switch supportedClientIdScheme {
     case .preregistered(let clients):
-      guard let client = clients[clients.keys.first!] else {
+      guard
+        let key = clients.keys.first,
+        let client = clients[key]
+      else {
         throw ValidationError.validationError("Client with client_id \(clientId) is not pre-registered")
       }
       try await verifySignature(

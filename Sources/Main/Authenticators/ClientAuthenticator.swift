@@ -71,11 +71,14 @@ internal actor ClientAuthenticator {
     
     switch scheme {
     case .preregistered(let clients):
-      guard let client = clients[verifierId.originalClientId] else {
+      guard
+        let key = clients.keys.first,
+        let client = clients[key]
+      else {
         throw ValidationError.validationError("preregistered client not found")
       }
       return .preRegistered(
-        clientId: clientId,
+        clientId: client.clientId,
         legalName: client.legalName
       )
       
@@ -124,10 +127,10 @@ internal actor ClientAuthenticator {
         certificate: certificate
       )
       
-    case .decentralizedIdentifier(let keyLookup):
+    case .decentralizedIdentifier(let did, let keyLookup):
       return try await didPublicKeyLookup(
         jws: try JWS(compactSerialization: jwt),
-        clientId: clientId,
+        clientId: did.string,
         keyLookup: keyLookup
       )
       
