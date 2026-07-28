@@ -30,8 +30,8 @@ public struct ResolvedRequestData: Sendable {
     return request.client
   }
 
-  /// Pre-validated WRP Registration Certificate (WRPRC) if available.
-  public var registrationCertificate: WRPRegistrationCertificate? {
+  /// WRP Registration Certificate (WRPRC) raw value extracted from `verifier_info`, if any.
+  public var registrationCertificate: String? {
     return request.registrationCertificate
   }
 }

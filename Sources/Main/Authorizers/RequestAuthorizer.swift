@@ -16,20 +16,20 @@
 import Foundation
 import X509
 
-/// Result of request authorization containing any policy warnings.
+/// Result of request authorization: the policy accepted the request, optionally
+/// returning warnings the caller should surface.
 public struct AuthorizationResult: Sendable {
-  /// Policy warnings that do not stop processing.
-  /// Callers should handle these appropriately (e.g., display to user).
-  public let violations: [String: [PolicyViolation]]
+  /// Warnings returned by the policy alongside a `granted` outcome.
+  public let warnings: [String: [PolicyViolation]]
 
-  /// The validated WRPRC if present and valid.
-  public let registrationCertificate: WRPRegistrationCertificate?
+  /// The WRPRC raw value if present.
+  public let registrationCertificate: String?
 
   public init(
-    violations: [String: [PolicyViolation]] = [:],
-    registrationCertificate: WRPRegistrationCertificate? = nil
+    warnings: [String: [PolicyViolation]] = [:],
+    registrationCertificate: String? = nil
   ) {
-    self.violations = violations
+    self.warnings = warnings
     self.registrationCertificate = registrationCertificate
   }
 }
@@ -44,7 +44,7 @@ public struct AuthorizationResult: Sendable {
 ///
 /// Authorization is only performed if:
 /// 1. A `RegistrationCertificatePolicy` is configured, AND
-/// 2. A pre-validated `WRPRegistrationCertificate` is available in the resolved request
+/// 2. A pre-validated WRPRC (raw `String`) is available in the resolved request
 ///
 /// If no policy is configured, authorization is skipped and an empty result is returned.
 public actor RequestAuthorizer {
@@ -58,49 +58,40 @@ public actor RequestAuthorizer {
 
   /// Authorizes a resolved request by applying WRPRC policy validation.
   ///
-  /// The WRPRC has already been validated (structure, trust, signature) during
-  /// request authentication. This method only applies the policy validation
-  /// comparing the WRPRC permissions against the DCQL request.
-  ///
   /// - Parameter resolvedRequest: The resolved request data to authorize
-  /// - Returns: Authorization result containing any warnings
-  /// - Throws: `ValidationError` if policy validation fails with errors
+  /// - Returns: `AuthorizationResult` carrying any warnings from a `.granted` outcome.
+  /// - Throws: `ValidationError.authorizationPolicyNotMet` if the policy returned `.notGranted`.
   public func authorize(resolvedRequest: ResolvedRequestData) async throws -> AuthorizationResult {
     // If no policy is configured, skip authorization
     guard let policy = policy else {
       return AuthorizationResult()
     }
 
-    // Get the pre-validated WRPRC from the resolved request
-    // This was validated during request authentication
     guard let wrprc = resolvedRequest.registrationCertificate else {
-      // If policy is configured but no WRPRC was validated,
-      // the request authentication should have failed.
-      // This is a defensive check.
       throw ValidationError.validationError(
         "WRPRC policy is configured but no validated WRPRC is available"
       )
     }
 
-    // Extract WRPAC (authentication certificate) from client
     guard let wrpac = extractWRPAC(from: resolvedRequest.client) else {
       throw ValidationError.validationError(
         "WRPRC policy is configured but client does not have an authentication certificate"
       )
     }
 
-    // Get DCQL for policy validation
     guard let dcql = resolvedRequest.dcql else {
       throw ValidationError.validationError("DCQL is required for WRPRC policy validation")
     }
 
-    // Apply policy validation - compare WRPRC permissions against DCQL request
-    let policyViolations = await policy.validatePolicy(wrpac, wrprc, dcql)
-    
-    return AuthorizationResult(
-      violations: policyViolations,
-      registrationCertificate: wrprc
-    )
+    switch await policy.validatePolicy(wrpac, wrprc, dcql) {
+    case .granted(let warnings):
+      return AuthorizationResult(
+        warnings: warnings,
+        registrationCertificate: wrprc
+      )
+    case .notGranted(let error):
+      throw ValidationError.authorizationPolicyNotMet(error)
+    }
   }
 
   // MARK: - Private Methods

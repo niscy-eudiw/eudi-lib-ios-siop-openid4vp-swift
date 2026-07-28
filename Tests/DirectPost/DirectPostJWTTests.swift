@@ -63,9 +63,8 @@ final class DirectPostJWTTests: DiXCTest {
       vpConfiguration: .default(),
       responseEncryptionConfiguration: .default(),
       registrationCertificatePolicy: .init(
-        certificateTrust: { _ in return true },
         validatePolicy: { wrpac, wrprc, dcql in
-          return [:]
+          return .granted()
         })
     )
     
@@ -629,9 +628,8 @@ final class DirectPostJWTTests: DiXCTest {
       vpConfiguration: .default(),
       responseEncryptionConfiguration: .default(),
       registrationCertificatePolicy: .init(
-        certificateTrust: { _ in return true },
         validatePolicy: { wrpac, wrprc, dcql in
-          return [:]
+          return .granted()
         })
     )
     
@@ -736,9 +734,8 @@ final class DirectPostJWTTests: DiXCTest {
       vpConfiguration: .default(),
       responseEncryptionConfiguration: .default(),
       registrationCertificatePolicy: .init(
-        certificateTrust: { _ in return true },
         validatePolicy: { wrpac, wrprc, dcql in
-          return [:]
+          return .granted()
         })
     )
     
@@ -840,9 +837,8 @@ final class DirectPostJWTTests: DiXCTest {
       vpConfiguration: .default(),
       responseEncryptionConfiguration: .default(),
       registrationCertificatePolicy: .init(
-        certificateTrust: { _ in return true },
         validatePolicy: { wrpac, wrprc, dcql in
-          return [:]
+          return .granted()
         })
     )
     
@@ -1348,7 +1344,7 @@ final class DirectPostJWTTests: DiXCTest {
 
     // Should succeed with empty result when no policy configured
     let result = try await authorizer.authorize(resolvedRequest: resolved)
-    XCTAssertTrue(result.violations.isEmpty)
+    XCTAssertTrue(result.warnings.isEmpty)
     XCTAssertNil(result.registrationCertificate)
   }
 
@@ -1356,10 +1352,9 @@ final class DirectPostJWTTests: DiXCTest {
   /// Note: With the refactored architecture, WRPRC structural validation happens earlier in RequestAuthenticator.
   /// This test verifies that RequestAuthorizer correctly fails if no registrationCertificate is present.
   func testRequestAuthorizerFailsWhenPolicyConfiguredButNoValidatedWRPRC() async throws {
-    // Create a policy that trusts all certificates
+    // Create a policy that always grants
     let policy = RegistrationCertificatePolicy(
-      certificateTrust: { _ in true },
-      validatePolicy: { _, _, _ in [:] }
+      validatePolicy: { _, _, _ in .granted() }
     )
 
     let authorizer = RequestAuthorizer(policy: policy)
@@ -1408,67 +1403,31 @@ final class DirectPostJWTTests: DiXCTest {
     }
   }
 
-  /// Tests that policy violations are correctly categorized.
-  func testPolicyViolationCategorization() async throws {
-    // Test that warnings are correctly identified
-    let warning = PolicyViolationWarning(
-      code: "DATA_SCOPE_EXCEEDED",
-      message: "Verifier requested more data than registered for"
-    )
-    let warningViolation = PolicyViolation.warning(warning)
-
-    let error = PolicyViolationError(
-      code: "INVALID_USE_CASE",
-      message: "Verifier's use case is not permitted"
-    )
-    let errorViolation = PolicyViolation.error(error)
-
-    // Test the array extension
-    let mixedViolations: [PolicyViolation] = [warningViolation, errorViolation]
-    XCTAssertTrue(mixedViolations.hasErrors)
-    XCTAssertEqual(mixedViolations.errors.count, 1)
-    XCTAssertEqual(mixedViolations.warnings.count, 1)
-
-    let warningsOnly: [PolicyViolation] = [warningViolation]
-    XCTAssertFalse(warningsOnly.hasErrors)
-    XCTAssertEqual(warningsOnly.warnings.count, 1)
-  }
-
-  /// Tests WRPRegistrationCertificate parsing from verifier_info.
-  func testWRPRegistrationCertificateParsingFromVerifierInfo() async throws {
-    // Test that WRPRC is correctly parsed from verifier_info
-    let wrprcInfo = TestsConstants.testWRPRCVerifierInfo
-
-    XCTAssertEqual(wrprcInfo.format, OpenId4VPSpec.VERIFIER_INFO_FORMAT_WRPRC)
-
-    // Verify the JWT can be extracted and parsed
-    do {
-      let wrprc = try WRPRegistrationCertificate.from(verifierInfo: [wrprcInfo])
-      XCTAssertNotNil(wrprc)
-      XCTAssertNotNil(wrprc?.certificate)
-      XCTAssertFalse(wrprc!.certificateChain.isEmpty)
-    } catch {
-      // Expected to fail on JWT parsing due to test JWT format
-      XCTAssertTrue(error.localizedDescription.contains("JWT"))
+  /// Tests the Authorization outcome shape (warnings are keyed for per-query UI display).
+  func testAuthorizationOutcomes() async throws {
+    let granted = Authorization.granted(warnings: [
+      "query_0": [PolicyViolation("Verifier requested more data than registered for")]
+    ])
+    switch granted {
+    case .granted(let warnings):
+      XCTAssertEqual(warnings["query_0"]?.count, 1)
+      XCTAssertEqual(
+        warnings["query_0"]?.first?.violation,
+        "Verifier requested more data than registered for"
+      )
+    case .notGranted:
+      XCTFail("expected .granted")
     }
-  }
 
-  /// Tests that missing verifier_info returns nil from WRPRC parser.
-  func testWRPRegistrationCertificateReturnsNilForMissingVerifierInfo() async throws {
-    let wrprc = try WRPRegistrationCertificate.from(verifierInfo: nil)
-    XCTAssertNil(wrprc)
-  }
-
-  /// Tests that verifier_info without WRPRC format returns nil.
-  func testWRPRegistrationCertificateReturnsNilForNonWRPRCFormat() async throws {
-    let otherInfo = VerifierInfo(
-      format: "other_format",
-      data: JSON(stringLiteral: "test"),
-      credentialIds: nil
+    let notGranted = Authorization.notGranted(
+      error: PolicyViolation("Verifier's use case is not permitted")
     )
-
-    let wrprc = try WRPRegistrationCertificate.from(verifierInfo: [otherInfo])
-    XCTAssertNil(wrprc)
+    switch notGranted {
+    case .granted:
+      XCTFail("expected .notGranted")
+    case .notGranted(let error):
+      XCTAssertEqual(error.violation, "Verifier's use case is not permitted")
+    }
   }
 
   /// Tests that RequestAuthorizer correctly extracts WRPAC from different client types.
@@ -1522,19 +1481,17 @@ final class DirectPostJWTTests: DiXCTest {
 
     // Example policy that validates WRPRC against DCQL requests
     let registrationPolicy = RegistrationCertificatePolicy(
-      certificateTrust: chainVerifier,
       validatePolicy: { wrpac, wrprc, dcql in
-        var violations: [PolicyViolation] = []
+        var warnings: [String: [PolicyViolation]] = [:]
 
         // Example: Check if the number of credentials requested is reasonable
         if dcql.credentials.count > 5 {
-          violations.append(.warning(PolicyViolationWarning(
-            code: "EXCESSIVE_CREDENTIALS",
-            message: "Request asks for more than 5 credentials"
-          )))
+          warnings["global", default: []].append(
+            PolicyViolation("Request asks for more than 5 credentials")
+          )
         }
 
-        return ["violations": violations]
+        return .granted(warnings: warnings)
       }
     )
 

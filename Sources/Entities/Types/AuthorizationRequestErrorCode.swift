@@ -133,7 +133,8 @@ extension AuthorizationRequestErrorCode {
            .missingResponseType,
            .missingNonce,
            .invalidJarmRequirement,
-           .invalidResponseEncryptionSpecification:
+           .invalidResponseEncryptionSpecification,
+           .authorizationPolicyNotMet:
         return .invalidRequest
       }
     }

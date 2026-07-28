@@ -15,81 +15,26 @@
  */
 import Foundation
 
-/// Represents violations of the WRP Registration Certificate policy.
-/// Per ETSI TS 119 475, policy validation may produce errors that stop processing
-/// or warnings that are returned to callers for handling.
-public enum PolicyViolation: Sendable, Equatable {
-  /// Denotes violations of the policy that should **stop the processing** of the authorization request.
-  case error(PolicyViolationError)
+/// A single policy rule violation, produced by a `RegistrationCertificatePolicy`.
+///
+/// Whether a violation halts processing or is a warning is determined by how it
+/// is returned inside `Authorization`, not by the violation itself.
+public struct PolicyViolation: Sendable, Equatable {
+  public let violation: String
 
-  /// Denotes violations of the policy that **do not stop processing**.
-  /// It is up to callers to handle them accordingly.
-  case warning(PolicyViolationWarning)
-}
-
-/// Error-level policy violations that stop request processing.
-public struct PolicyViolationError: Sendable, Equatable {
-  /// A code identifying the type of error
-  public let code: String
-
-  /// A human-readable description of the error
-  public let message: String
-
-  public init(code: String, message: String) {
-    self.code = code
-    self.message = message
+  public init(_ violation: String) {
+    precondition(!violation.isEmpty, "violation must not be empty")
+    self.violation = violation
   }
 }
 
-/// Warning-level policy violations that do not stop processing.
-public struct PolicyViolationWarning: Sendable, Equatable {
-  /// A code identifying the type of warning
-  public let code: String
+/// The outcome of a `RegistrationCertificatePolicy` evaluation.
+public enum Authorization: Sendable, Equatable {
+  /// Authorization succeeded. `warnings` are surfaced to the caller via the
+  /// resolved `AuthorizationRequest`.
+  case granted(warnings: [String: [PolicyViolation]] = [:])
 
-  /// A human-readable description of the warning
-  public let message: String
-
-  public init(code: String, message: String) {
-    self.code = code
-    self.message = message
-  }
-}
-
-// MARK: - Convenience Extensions
-
-public extension PolicyViolation {
-  /// Returns true if this is an error-level violation
-  var isError: Bool {
-    if case .error = self { return true }
-    return false
-  }
-
-  /// Returns true if this is a warning-level violation
-  var isWarning: Bool {
-    if case .warning = self { return true }
-    return false
-  }
-}
-
-public extension Array where Element == PolicyViolation {
-  /// Returns all error-level violations
-  var errors: [PolicyViolationError] {
-    compactMap { violation in
-      if case .error(let error) = violation { return error }
-      return nil
-    }
-  }
-
-  /// Returns all warning-level violations
-  var warnings: [PolicyViolationWarning] {
-    compactMap { violation in
-      if case .warning(let warning) = violation { return warning }
-      return nil
-    }
-  }
-
-  /// Returns true if any error-level violations exist
-  var hasErrors: Bool {
-    contains { $0.isError }
-  }
+  /// Authorization was denied. The resolver fails the request with an
+  /// authorization-policy error carrying `error`.
+  case notGranted(error: PolicyViolation)
 }

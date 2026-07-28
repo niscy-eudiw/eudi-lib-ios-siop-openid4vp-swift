@@ -29,9 +29,9 @@ extension ResolvedRequestData {
 
     public let verifierInfo: [VerifierInfo]?
 
-    /// Pre-validated WRP Registration Certificate (WRPRC) extracted from verifier_info.
-    /// This is validated during request authentication if a RegistrationCertificatePolicy is configured.
-    public let registrationCertificate: WRPRegistrationCertificate?
+    /// WRP Registration Certificate (WRPRC) raw value extracted from `verifier_info`.
+    /// Present only when a `RegistrationCertificatePolicy` is configured.
+    public let registrationCertificate: String?
 
     /// Initializes a `VpTokenData` instance with the provided parameters.
     ///
@@ -57,7 +57,7 @@ extension ResolvedRequestData {
       responseEncryptionSpecification: ResponseEncryptionSpecification?,
       transactionData: [TransactionData]? = nil,
       verifierInfo: [VerifierInfo]? = nil,
-      registrationCertificate: WRPRegistrationCertificate? = nil
+      registrationCertificate: String? = nil
     ) {
       self.presentationQuery = presentationQuery
       self.clientMetaData = clientMetaData
