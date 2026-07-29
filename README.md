@@ -247,39 +247,55 @@ Library currently supports `response_type` equal to `id_token` or `vp_token id_t
 
 ### WRP authorization using WRP Registration Certificate
 
-The library allows the caller to enforce Relying Party Authorization policies based on WRPRC. It can be configured to expect a Registration Certificate (WRPRC) 
+The library allows the caller to enforce Relying Party Authorization policies based on WRPRC. It can be configured to expect a Registration Certificate (WRPRC)
 to be provided in the authorization request. By doing so it is expected that the `ResolvedRequestData.VpTokenData.verifierInfo` array includes a WRPRC
-as defined in 472-2 V1.2.1 and CIR 2026/1731 Annex II. 
+as defined in 472-2 V1.2.1 and CIR 2026/1731 Annex II.
 
 > [!WARNING]
-> 
+>
 > Authorization policy based on WRPRC is only applicable to `x509_hash` client id scheme.
 
 > [!IMPORTANT]
-> It is **not in the scope** of the library to provide implementations of authorization policies. Only gives the proper means to 
-> hook a policy's application to the proper point of the authorization request resolution flow. 
+> It is **not in the scope** of the library to provide implementations of authorization policies — nor to perform trust or signature
+> validation on the WRPRC itself. The library extracts the raw WRPRC value from `verifier_info` and hands it, opaquely, to the caller's
+> policy. Any trust chain checks, JWT signature verification, or claim validation must be performed inside `validatePolicy` by the caller.
 
-To configure library to expect a registration certificate a `RegistrationCertificatePolicy` must be provided in `OpenId4VPConfiguration`. If such 
-a policy is provided, and during the request object resolution step, the library will:
-- Extract the registration certificate from the authorization request.
-- Evaluate that the provided registration is signed by a trusted WPRRC Provider (calling `RegistrationCertificatePolicy.certificateTrust`)
-- Evaluate that the provided registration certificate complies with the policy provided (calling `OpenId4VPConfiguration.registrationCertificatePolicy.validatePolicy()`)
-- Include policy violations, if any, in the final resolution  
+To configure the library to expect a registration certificate a `RegistrationCertificatePolicy` must be provided in `OpenId4VPConfiguration`. If such
+a policy is provided, during the request object resolution step the library will:
+
+- Enforce that `verifier_info` is present and contains **exactly one** WRPRC entry (per CIR 2024/2082).
+- Extract the raw WRPRC value (a `String`, opaque to the library) and pass it to `validatePolicy` along with the WRPAC (`X509.Certificate` from the request's `x5c`) and the DCQL query.
+- Act on the returned `Authorization`:
+  - `.granted(warnings:)` — resolution succeeds; warnings are surfaced on the final `AuthorizationRequest.warnings`.
+  - `.notGranted(error:)` — resolution fails with `ValidationError.authorizationPolicyNotMet(error)`, delivered as `AuthorizationRequest.invalidResolution`.
+
+Warnings are a `[String: [PolicyViolation]]` map. A common convention is to key by the DCQL credential-query id (`credential.id.value`) so the wallet UI can render warnings alongside the specific credential option they apply to; use `"global"` (or any label) for warnings that apply to the whole request.
 
 ```swift
 let registrationCertificatePolicy = RegistrationCertificatePolicy(
-      certificateTrust: {
-        ...
-      },
-      validatePolicy: { wrpac, wrprc, dcql in
-        ...
-      })
-    )
+  validatePolicy: { wrpac, wrprc, dcql in
+    // wrprc is the raw serialized WRPRC (typically a JWT string) from verifier_info.
+    // Parse it here if you need the leaf certificate / x5c chain, and perform any
+    // trust / signature / claims validation your wallet requires.
+
+    if /* the request must be rejected */ {
+      return .notGranted(error: PolicyViolation("reason for rejection"))
+    }
+
+    // Bucket warnings by DCQL query id for per-option UI display.
+    var warnings: [String: [PolicyViolation]] = [:]
+    for credential in dcql.credentials {
+      let key = credential.id.value
+      // ...evaluate per credential; append warnings under `key`...
+    }
+    return .granted(warnings: warnings)
+  }
+)
 
 let config = OpenId4VPConfiguration(
     ....
-    registrationCertificatePolicy = policy, 
-    ....    
+    registrationCertificatePolicy: registrationCertificatePolicy,
+    ....
 )
 ```
 

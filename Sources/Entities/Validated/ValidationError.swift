@@ -57,6 +57,7 @@ indirect public enum ValidationError: AuthorizationRequestError, Equatable {
   case invalidResponseEncryptionSpecification
   case invalidVerifierAttestationFormat
   case invalidVerifierAttestationCredentialIds
+  case authorizationPolicyNotMet(PolicyViolation)
 
   public var errorDescription: String? {
     switch self {
@@ -142,6 +143,8 @@ indirect public enum ValidationError: AuthorizationRequestError, Equatable {
       return ".invalidVerifierAttestationCredentialIds"
     case .invalidResponseEncryptionSpecification:
       return ".invalidResponseEncryptionSpecification"
+    case .authorizationPolicyNotMet(let violation):
+      return ".authorizationPolicyNotMet \(violation.violation)"
     }
   }
 }

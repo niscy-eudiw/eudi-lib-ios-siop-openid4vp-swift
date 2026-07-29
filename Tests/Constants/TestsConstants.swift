@@ -482,11 +482,6 @@ d82/03tD1U0Slpjr2098V5XpQMeSveb/elCPCohSBt7tBiaN98zc
   /// ```
   static var defaultRegistrationCertificatePolicy: RegistrationCertificatePolicy {
     RegistrationCertificatePolicy(
-      certificateTrust: { certificates in
-        // In production: verify against your trusted WRPRC issuer root certificates
-        // For testing, we use the existing chain verifier
-        return verifyChain(certificates)
-      },
       validatePolicy: { wrpac, wrprc, dcql in
         defaultPolicyValidation(wrpac: wrpac, wrprc: wrprc, dcql: dcql)
       }
@@ -494,69 +489,27 @@ d82/03tD1U0Slpjr2098V5XpQMeSveb/elCPCohSBt7tBiaN98zc
   }
 
   /// Default policy validation logic demonstrating best practices.
-  /// Integrators can use this as a reference or extend it with custom checks.
   ///
   /// - Parameters:
   ///   - wrpac: The WRP Authentication Certificate (from request JWT x5c header)
-  ///   - wrprc: The WRP Registration Certificate (from verifier_info)
+  ///   - wrprc: The WRP Registration Certificate (raw JWT string, from verifier_info)
   ///   - dcql: The DCQL query specifying what credentials/claims are requested
-  /// - Returns: Array of policy violations (errors stop processing, warnings are informational)
+  /// - Returns: `.granted(warnings:)` with informational warnings.
   static func defaultPolicyValidation(
     wrpac: Certificate,
-    wrprc: WRPRegistrationCertificate,
+    wrprc: String,
     dcql: DCQL
-  ) -> [String: [PolicyViolation]] {
-    var violations: [PolicyViolation] = []
+  ) -> Authorization {
+    var warnings: [String: [PolicyViolation]] = [:]
 
-    // 1. WRPRC VALIDITY PERIOD
-    // Check if the registration certificate is currently valid
-    let now = Date()
-    if now < wrprc.certificate.notValidBefore {
-      violations.append(.error(PolicyViolationError(
-        code: "WRPRC_NOT_YET_VALID",
-        message: "Registration certificate is not yet valid (valid from: \(wrprc.certificate.notValidBefore))"
-      )))
-    }
-    if now > wrprc.certificate.notValidAfter {
-      violations.append(.error(PolicyViolationError(
-        code: "WRPRC_EXPIRED",
-        message: "Registration certificate has expired (expired: \(wrprc.certificate.notValidAfter))"
-      )))
-    }
-
-    // 2. CERTIFICATE BINDING (WRPAC ↔ WRPRC)
-    // Verify that the authentication certificate (WRPAC) and registration
-    // certificate (WRPRC) belong to the same organization.
-    // This prevents a verifier from using another organization's registration.
-    let wrpacSubject = wrpac.subject.description
-
-    // Extract organization (O=) from subjects for comparison
-    let wrpacOrg = extractOrganization(from: wrpacSubject)
-    let wrprcOrg = extractOrganization(from: wrprc.certificate.issuer.description)
-
-    if let wpaOrg = wrpacOrg, let wprOrg = wrprcOrg, wpaOrg != wprOrg {
-      violations.append(.error(PolicyViolationError(
-        code: "CERTIFICATE_ORG_MISMATCH",
-        message: "Authentication certificate organization '\(wpaOrg)' does not match registration certificate issuer '\(wprOrg)'"
-      )))
-    }
-
-    // 3. CREDENTIAL SCOPE VALIDATION
-    // Check that requested credentials are within the WRPRC-permitted scope.
-    // In a real implementation, you would extract permitted credentials from
-    // the WRPRC claims/payload.
-
+    // 1. GLOBAL CREDENTIAL SCOPE VALIDATION
     let requestedCredentialCount = dcql.credentials.count
     if requestedCredentialCount > 10 {
-      violations.append(.warning(PolicyViolationWarning(
-        code: "EXCESSIVE_CREDENTIALS",
-        message: "Request asks for \(requestedCredentialCount) credentials, which exceeds recommended limit"
-      )))
+      warnings["global", default: []].append(PolicyViolation(
+        "Request asks for \(requestedCredentialCount) credentials, which exceeds recommended limit"
+      ))
     }
 
-    // 4. CLAIM/ATTRIBUTE SCOPE VALIDATION
-    // Check specific attributes being requested.
-    // Sensitive attributes might warrant warnings or require specific registration.
     let sensitiveAttributes = [
       "birth_date", "age_birth_year",
       "resident_address", "resident_street",
@@ -564,61 +517,28 @@ d82/03tD1U0Slpjr2098V5XpQMeSveb/elCPCohSBt7tBiaN98zc
       "biometric_data", "fingerprint"
     ]
 
+    // 2. PER-QUERY WARNINGS (sensitive attributes + intent-to-retain)
     for credential in dcql.credentials {
-      if let claims = credential.claims {
-        for claim in claims {
-          let claimPath = claim.path.description
-          for sensitive in sensitiveAttributes {
-            if claimPath.lowercased().contains(sensitive) {
-              violations.append(.warning(PolicyViolationWarning(
-                code: "SENSITIVE_ATTRIBUTE_REQUESTED",
-                message: "Sensitive attribute '\(claimPath)' is being requested"
-              )))
-            }
-          }
+      let key = credential.id.value
+      guard let claims = credential.claims else { continue }
+      for claim in claims {
+        let claimPath = claim.path.description
+
+        for sensitive in sensitiveAttributes where claimPath.lowercased().contains(sensitive) {
+          warnings[key, default: []].append(PolicyViolation(
+            "Sensitive attribute '\(claimPath)' is being requested"
+          ))
+        }
+
+        if claim.intentToRetain == true {
+          warnings[key, default: []].append(PolicyViolation(
+            "Verifier intends to retain attribute '\(claimPath)'"
+          ))
         }
       }
     }
 
-    // 5. INTENT TO RETAIN CHECK
-    // If credentials specify intent_to_retain, warn the user
-    for credential in dcql.credentials {
-      if let claims = credential.claims {
-        for claim in claims {
-          if claim.intentToRetain == true {
-            let claimPath = claim.path.description
-            violations.append(.warning(PolicyViolationWarning(
-              code: "DATA_RETENTION_REQUESTED",
-              message: "Verifier intends to retain attribute '\(claimPath)'"
-            )))
-          }
-        }
-      }
-    }
-
-    // 6. CERTIFICATE CHAIN LENGTH CHECK
-    // Unusually long certificate chains might indicate issues
-    if wrprc.certificateChain.count > 5 {
-      violations.append(.warning(PolicyViolationWarning(
-        code: "LONG_CERTIFICATE_CHAIN",
-        message: "Registration certificate chain has \(wrprc.certificateChain.count) certificates"
-      )))
-    }
-
-    return ["violations": violations]
-  }
-
-  /// Helper to extract organization (O=) from a certificate subject/issuer string.
-  private static func extractOrganization(from subject: String) -> String? {
-    // Subject format: "CN=...,O=Organization Name,C=..."
-    let components = subject.split(separator: ",")
-    for component in components {
-      let trimmed = component.trimmingCharacters(in: .whitespaces)
-      if trimmed.hasPrefix("O=") {
-        return String(trimmed.dropFirst(2))
-      }
-    }
-    return nil
+    return .granted(warnings: warnings)
   }
 }
 

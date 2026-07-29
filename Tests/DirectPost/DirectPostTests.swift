@@ -172,9 +172,8 @@ final class DirectPostTests: DiXCTest {
       vpConfiguration: .default(),
       responseEncryptionConfiguration: .default(),
       registrationCertificatePolicy: .init(
-        certificateTrust: { _ in return true },
         validatePolicy: { wrpac, wrprc, dcql in
-          return [:]
+          return .granted()
         })
     )
     

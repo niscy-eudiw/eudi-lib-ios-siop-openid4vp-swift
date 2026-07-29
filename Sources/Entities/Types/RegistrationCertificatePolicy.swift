@@ -17,50 +17,28 @@ import Foundation
 import X509
 
 /// Configuration for WRP Registration Certificate (WRPRC) policy validation.
-/// Per ETSI TS 119 475 V1.2.1, the WRPRC conveys the WRP's declared use cases
-/// and data access policies to both the EUDIW and the end user.
 public struct RegistrationCertificatePolicy: @unchecked Sendable {
-  /// Trust validator for the WRPRC signing certificate.
-  /// Implements the logic to secure trust to the signing certificate of the WRPRC.
-  public let certificateTrust: CertificateTrust
-
   /// Policy validation function that evaluates the WRPRC against the request context.
   /// - Parameters:
   ///   - wrpac: The WRP Authentication Certificate
-  ///   - wrprc: The WRP Registration Certificate (as a signed JWT)
+  ///   - wrprc: The WRP Registration Certificate (raw serialized value as delivered in `verifier_info`)
   ///   - dcql: The DCQL (Digital Credentials Query Language) from the request
-  /// - Returns: A list of policy violations (errors and/or warnings)
+  /// - Returns: `Authorization.granted(warnings:)` to accept the request (any warnings are
+  ///   forwarded to the caller), or `Authorization.notGranted(error:)` to reject it — in
+  ///   which case the resolver fails with `ValidationError.authorizationPolicyNotMet`.
   public let validatePolicy: @Sendable (
     _ wrpac: Certificate,
-    _ wrprc: WRPRegistrationCertificate,
+    _ wrprc: String,
     _ dcql: DCQL
-  ) async -> [String: [PolicyViolation]]
+  ) async -> Authorization
 
   public init(
-    certificateTrust: @escaping CertificateTrust,
     validatePolicy: @escaping @Sendable (
       _ wrpac: Certificate,
-      _ wrprc: WRPRegistrationCertificate,
+      _ wrprc: String,
       _ dcql: DCQL
-    ) async -> [String: [PolicyViolation]]
+    ) async -> Authorization
   ) {
-    self.certificateTrust = certificateTrust
     self.validatePolicy = validatePolicy
-  }
-}
-
-// MARK: - Default Policy
-
-public extension RegistrationCertificatePolicy {
-  /// Creates a policy that only validates certificate trust without additional policy checks.
-  /// - Parameter certificateTrust: The trust validator for the WRPRC signing certificate
-  /// - Returns: A policy that returns no violations if the certificate is trusted
-  static func trustOnly(
-    certificateTrust: @escaping CertificateTrust
-  ) -> RegistrationCertificatePolicy {
-    RegistrationCertificatePolicy(
-      certificateTrust: certificateTrust,
-      validatePolicy: { _, _, _ in [:] }
-    )
   }
 }
