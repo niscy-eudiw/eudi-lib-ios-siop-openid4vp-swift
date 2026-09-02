@@ -202,16 +202,9 @@ internal actor ClientAuthenticator {
     // Determine the response destination
     let responseDestination = responseUri ?? redirectUri
 
+    // Per OpenID4VP spec, only redirect_uri scheme allows unsigned (plain) requests.
+    // All other schemes (preregistered, x509, verifier_attestation, DID) require signed JAR.
     switch scheme {
-    case .preregistered(let clients):
-      guard let client = clients[clientId] else {
-        throw ValidationError.validationError("preregistered client not found")
-      }
-      // Preregistered clients are explicitly trusted by wallet configuration
-      return .preRegistered(
-        clientId: clientId,
-        legalName: client.legalName
-      )
     case .redirectUri:
       // For redirect_uri scheme, client_id must equal the response destination
       try validateRedirectUriSchemeBinding(
@@ -223,7 +216,11 @@ internal actor ClientAuthenticator {
       )
 
     default:
-      throw ValidationError.validationError("Scheme \(scheme) not supported for plain (unsigned) requests")
+      // Reject unsigned requests for all other schemes
+      throw ValidationError.validationError(
+        "Unsigned requests are only permitted for redirect_uri scheme. " +
+        "Scheme '\(scheme.scheme.rawValue)' requires a signed JAR (request or request_uri parameter)."
+      )
     }
   }
   
