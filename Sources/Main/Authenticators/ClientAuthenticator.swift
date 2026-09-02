@@ -20,27 +20,38 @@ import SwiftASN1
 import CryptoKit
 
 internal actor ClientAuthenticator {
-  
+
   let config: OpenId4VPConfiguration
-  
+
   init(config: OpenId4VPConfiguration) {
     self.config = config
   }
-  
-  func authenticate(fetchRequest: FetchedRequest) async throws -> Client {
+
+  func authenticate(
+    fetchRequest: FetchedRequest,
+    responseUri: URL?,
+    redirectUri: URL?
+  ) async throws -> Client {
     switch fetchRequest {
     case .plain(let requestObject):
       guard let clientId = requestObject.clientId else {
         throw ValidationError.validationError("clientId is missing from plain request")
       }
+      // For plain requests, use URIs from request object if not provided
+      let effectiveResponseUri = responseUri ?? requestObject.responseUri.flatMap { URL(string: $0) }
+      let effectiveRedirectUri = redirectUri ?? requestObject.redirectUri.flatMap { URL(string: $0) }
       return try await getClient(
         clientId: clientId,
+        responseUri: effectiveResponseUri,
+        redirectUri: effectiveRedirectUri,
         config: config
       )
     case .jwtSecured(let clientId, let jwt):
       return try await getClient(
         clientId: clientId,
         jwt: jwt,
+        responseUri: responseUri,
+        redirectUri: redirectUri,
         config: config
       )
     }
@@ -49,13 +60,15 @@ internal actor ClientAuthenticator {
   func getClient(
     clientId: String?,
     jwt: JWTString,
+    responseUri: URL?,
+    redirectUri: URL?,
     config: OpenId4VPConfiguration?
   ) async throws -> Client {
-    
+
     guard let clientId else {
       throw ValidationError.validationError("clientId is missing")
     }
-    
+
     guard !clientId.isEmpty else {
       throw ValidationError.validationError("clientId is missing")
     }
@@ -69,6 +82,9 @@ internal actor ClientAuthenticator {
       throw ValidationError.validationError("Unsupported client_id scheme: no matching scheme configured")
     }
 
+    // Determine the response destination (response_uri or redirect_uri depending on response mode)
+    let responseDestination = responseUri ?? redirectUri
+
     switch scheme {
     case .preregistered(let clients):
       guard
@@ -77,20 +93,21 @@ internal actor ClientAuthenticator {
       else {
         throw ValidationError.validationError("preregistered client not found")
       }
+      // Preregistered clients are explicitly trusted by wallet configuration
       return .preRegistered(
         clientId: client.clientId,
         legalName: client.legalName
       )
-      
+
     case .x509Hash:
       guard let jws = try? JWS(compactSerialization: jwt) else {
         throw ValidationError.validationError("Unable to process JWT")
       }
-      
+
       guard let chain: [String] = jws.header.x5c else {
         throw ValidationError.validationError("No certificate in header")
       }
-      
+
       let certificates: [Certificate] = parseCertificates(from: chain)
       guard
         let certificate = certificates.first,
@@ -98,49 +115,69 @@ internal actor ClientAuthenticator {
       else {
         throw ValidationError.validationError("No valid certificate in chain")
       }
-      
+
       if expectedHash != verifierId.originalClientId {
         throw ValidationError.validationError("ClientId does not match leaf certificate's SHA-256 hash")
       }
-      
+
+      // Validate response_uri host is in certificate SANs
+      try validateResponseUriAgainstCertificateSANs(
+        responseDestination: responseDestination,
+        certificate: certificate
+      )
+
       return .x509Hash(
         clientId: verifierId.originalClientId,
         authenticationCertificate: certificate
       )
-      
+
     case .x509SanDns:
       guard let jws = try? JWS(compactSerialization: jwt) else {
         throw ValidationError.validationError("Unable to process JWT")
       }
-      
+
       guard let chain: [String] = jws.header.x5c else {
         throw ValidationError.validationError("No certificate in header")
       }
-      
+
       let certificates: [Certificate] = parseCertificates(from: chain)
       guard let certificate = certificates.first else {
         throw ValidationError.validationError("No certificate in chain")
       }
-      
+
+      // Validate response_uri host is in certificate SANs
+      try validateResponseUriAgainstCertificateSANs(
+        responseDestination: responseDestination,
+        certificate: certificate
+      )
+
       return .x509SanDns(
         clientId: verifierId.originalClientId,
         certificate: certificate
       )
-      
+
     case .decentralizedIdentifier(let did, let keyLookup):
       return try await didPublicKeyLookup(
         jws: try JWS(compactSerialization: jwt),
         clientId: did.string,
         keyLookup: keyLookup
       )
-      
+
     case .verifierAttestation:
       return try verifierAttestation(
         jwt: jwt,
         supportedScheme: scheme,
-        clientId: verifierId.originalClientId
+        clientId: verifierId.originalClientId,
+        responseUri: responseUri,
+        redirectUri: redirectUri
       )
     case .redirectUri:
+      // redirect_uri scheme should not reach here for JWT-secured requests
+      // (rejected in AccessValidator), but if it does, validate binding
+      try validateRedirectUriSchemeBinding(
+        clientId: verifierId.originalClientId,
+        responseDestination: responseDestination
+      )
       return .redirectUri(
         clientId: verifierId.originalClientId
       )
@@ -149,6 +186,8 @@ internal actor ClientAuthenticator {
   
   func getClient(
     clientId: String,
+    responseUri: URL?,
+    redirectUri: URL?,
     config: OpenId4VPConfiguration?
   ) async throws -> Client {
     guard
@@ -160,16 +199,25 @@ internal actor ClientAuthenticator {
       throw ValidationError.validationError("Unsupported client_id scheme: no matching scheme configured")
     }
 
+    // Determine the response destination
+    let responseDestination = responseUri ?? redirectUri
+
     switch scheme {
     case .preregistered(let clients):
       guard let client = clients[clientId] else {
         throw ValidationError.validationError("preregistered client not found")
       }
+      // Preregistered clients are explicitly trusted by wallet configuration
       return .preRegistered(
         clientId: clientId,
         legalName: client.legalName
       )
     case .redirectUri:
+      // For redirect_uri scheme, client_id must equal the response destination
+      try validateRedirectUriSchemeBinding(
+        clientId: verifierId.originalClientId,
+        responseDestination: responseDestination
+      )
       return .redirectUri(
         clientId: verifierId.originalClientId
       )
@@ -182,24 +230,26 @@ internal actor ClientAuthenticator {
   private func verifierAttestation(
     jwt: JWTString,
     supportedScheme: SupportedClientIdPrefix,
-    clientId: String
+    clientId: String,
+    responseUri: URL?,
+    redirectUri: URL?
   ) throws -> Client {
     guard case let .verifierAttestation(verifier, clockSkew) = supportedScheme else {
       throw ValidationError.validationError("Scheme should be verifier attestation")
     }
-    
+
     guard let jws = try? JWS(compactSerialization: jwt) else {
       throw ValidationError.validationError("Unable to process JWT")
     }
-    
+
     let expectedType = JOSEObjectType(rawValue: "verifier-attestation+jwt")
     guard jws.header.typ == expectedType?.rawValue else {
       throw ValidationError.validationError("verifier-attestation+jwt not found in JWT header")
     }
-    
+
     _ = try jws.validate(using: verifier)
     let claims = try jws.verifierAttestationClaims()
-    
+
     try TimeChecks(skew: clockSkew)
       .verify(
         claimsSet: .init(
@@ -213,6 +263,15 @@ internal actor ClientAuthenticator {
           claims: [:]
         )
       )
+
+    // Validate response_uri/redirect_uri is in attestation's allowed URIs
+    try validateVerifierAttestationUriBinding(
+      responseUri: responseUri,
+      redirectUri: redirectUri,
+      allowedResponseUris: claims.responseUris,
+      allowedRedirectUris: claims.redirectUris
+    )
+
     return .attested(clientId: clientId)
   }
   
@@ -244,10 +303,128 @@ internal actor ClientAuthenticator {
     try jws.verifyJWS(
       publicKey: publicKey
     )
-    
+
     return .didClient(
       did: clientIdAsDID
     )
+  }
+
+  // MARK: - Response URI Binding Validation
+
+  /// Validates that the response destination host is in the certificate's Subject Alternative Names.
+  /// This ensures credentials are only sent to endpoints controlled by the authenticated verifier.
+  private func validateResponseUriAgainstCertificateSANs(
+    responseDestination: URL?,
+    certificate: Certificate
+  ) throws {
+    guard let responseDestination = responseDestination else {
+      // No response destination to validate - this will be caught later in the flow
+      return
+    }
+
+    guard let responseHost = responseDestination.host else {
+      throw ValidationError.validationError(
+        "response_uri/redirect_uri must have a valid host"
+      )
+    }
+
+    // Collect all SAN hosts (from both DNS names and URI SANs)
+    let dnsNames = try certificate.extensions.subjectAlternativeNames?
+      .rawSubjectAlternativeNames() ?? []
+
+    let uriSANs = try certificate.extensions.subjectAlternativeNames?
+      .rawUniformResourceIdentifiers() ?? []
+
+    let uriSANHosts = uriSANs.compactMap { URL(string: $0)?.host }
+
+    let allSANHosts = dnsNames + uriSANHosts
+
+    // Check 1: Exact match
+    if allSANHosts.contains(responseHost) {
+      return // Valid: exact host match
+    }
+
+    // Check 2: Same registrable domain (allows sibling subdomains)
+    // e.g., dev.verifier.eudiw.dev and dev.verifier-backend.eudiw.dev both share eudiw.dev
+    let responseBaseDomain = extractBaseDomain(from: responseHost)
+
+    for sanHost in allSANHosts {
+      let sanBaseDomain = extractBaseDomain(from: sanHost)
+      if responseBaseDomain == sanBaseDomain && !responseBaseDomain.isEmpty {
+        return // Valid: same organization domain
+      }
+    }
+
+    throw ValidationError.validationError(
+      "response_uri host '\(responseHost)' is not in certificate's Subject Alternative Names"
+    )
+  }
+
+  /// Extracts the base/registrable domain from a hostname.
+  /// For example: "dev.verifier-backend.eudiw.dev" -> "eudiw.dev"
+  /// This is a simplified implementation that assumes the last two components form the registrable domain.
+  private func extractBaseDomain(from host: String) -> String {
+    let components = host.split(separator: ".").map(String.init)
+    guard components.count >= 2 else {
+      return host
+    }
+    // Return last 2 components (e.g., "eudiw.dev")
+    return components.suffix(2).joined(separator: ".")
+  }
+
+  /// Validates that for redirect_uri scheme, the client_id equals the response destination.
+  /// Per OpenID4VP spec, this equality IS the authentication for redirect_uri scheme.
+  private func validateRedirectUriSchemeBinding(
+    clientId: String,
+    responseDestination: URL?
+  ) throws {
+    guard let responseDestination = responseDestination else {
+      throw ValidationError.validationError(
+        "redirect_uri scheme requires response_uri or redirect_uri to be present"
+      )
+    }
+
+    // The client_id (after stripping prefix) should equal the response destination URL
+    guard clientId == responseDestination.absoluteString else {
+      throw ValidationError.validationError(
+        "For redirect_uri scheme, client_id must equal response_uri/redirect_uri. " +
+        "client_id: '\(clientId)', response destination: '\(responseDestination.absoluteString)'"
+      )
+    }
+  }
+
+  /// Validates that the response_uri/redirect_uri is in the verifier attestation's allowed URIs.
+  private func validateVerifierAttestationUriBinding(
+    responseUri: URL?,
+    redirectUri: URL?,
+    allowedResponseUris: [String]?,
+    allowedRedirectUris: [String]?
+  ) throws {
+    // Check response_uri if present
+    if let responseUri = responseUri {
+      let responseUriString = responseUri.absoluteString
+      if let allowedResponseUris = allowedResponseUris, !allowedResponseUris.isEmpty {
+        guard allowedResponseUris.contains(responseUriString) else {
+          throw ValidationError.validationError(
+            "response_uri '\(responseUriString)' is not in verifier attestation's allowed response_uris"
+          )
+        }
+      }
+      // If response_uris claim is nil/empty, we allow any response_uri (per spec flexibility)
+    }
+
+    // Check redirect_uri if present
+    if let redirectUri = redirectUri {
+      let redirectUriString = redirectUri.absoluteString
+      if let allowedRedirectUris = allowedRedirectUris, !allowedRedirectUris.isEmpty {
+        guard allowedRedirectUris.contains(redirectUriString) else {
+          throw ValidationError.validationError(
+            "redirect_uri '\(redirectUriString)' is not in verifier attestation's allowed redirect_uris"
+          )
+        }
+      }
+      // If redirect_uris claim is nil/empty, we allow any redirect_uri (per spec flexibility)
+    }
   }
 }
 

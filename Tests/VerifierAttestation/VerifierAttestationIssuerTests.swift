@@ -65,6 +65,8 @@ final class VerifierAttestationIssuerTests: XCTestCase {
     let client = try await authenticator.clientAuthenticator.getClient(
       clientId: clientId,
       jwt: jwt.compactSerializedString,
+      responseUri: URL(string: "https://www.example.com")!,
+      redirectUri: nil,
       config: config
     )
 
@@ -107,6 +109,8 @@ final class VerifierAttestationIssuerTests: XCTestCase {
       _ = try await authenticator.clientAuthenticator.getClient(
         clientId: clientId,
         jwt: jwt.compactSerializedString,
+        responseUri: URL(string: "https://www.example.com")!,
+        redirectUri: nil,
         config: config
       )
 
