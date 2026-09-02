@@ -42,7 +42,7 @@ final class VerifierAttestationIssuerTests: XCTestCase {
 
   func testVerifierAttestationHappyPath() async throws {
 
-    let clientId = "client-id"
+    let clientId = "verifier_attestation:client-id"
     let issuer = VerifierAttestationIssuer()
     let verifier = await issuer.verifier!
     let jwt = try await issuer.attestation(
@@ -78,7 +78,7 @@ final class VerifierAttestationIssuerTests: XCTestCase {
 
   func testVerifierAttestationInvalidIssuer() async throws {
 
-    let clientId = "client-id"
+    let clientId = "verifier_attestation:client-id"
     var issuer: VerifierAttestationIssuer
 
     issuer = VerifierAttestationIssuer()

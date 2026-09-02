@@ -59,16 +59,16 @@ internal actor ClientAuthenticator {
     guard !clientId.isEmpty else {
       throw ValidationError.validationError("clientId is missing")
     }
-    
+
     guard
       let verifierId = try? VerifierId.parse(clientId: clientId).get(),
       let scheme = config?.supportedClientIdSchemes.first(
         where: { $0.scheme.rawValue == verifierId.scheme.rawValue }
-      ) ?? config?.supportedClientIdSchemes.first
+      )
     else {
-      throw ValidationError.validationError("No supported client Id scheme")
+      throw ValidationError.validationError("Unsupported client_id scheme: no matching scheme configured")
     }
-    
+
     switch scheme {
     case .preregistered(let clients):
       guard
@@ -155,11 +155,11 @@ internal actor ClientAuthenticator {
       let verifierId = try? VerifierId.parse(clientId: clientId).get(),
       let scheme = config?.supportedClientIdSchemes.first(
         where: { $0.scheme.rawValue == verifierId.scheme.rawValue }
-      ) ?? config?.supportedClientIdSchemes.first
+      )
     else {
-      throw ValidationError.validationError("No supported client Id scheme")
+      throw ValidationError.validationError("Unsupported client_id scheme: no matching scheme configured")
     }
-    
+
     switch scheme {
     case .preregistered(let clients):
       guard let client = clients[clientId] else {
@@ -173,9 +173,9 @@ internal actor ClientAuthenticator {
       return .redirectUri(
         clientId: verifierId.originalClientId
       )
-      
+
     default:
-      throw ValidationError.validationError("Scheme \(scheme) not supported")
+      throw ValidationError.validationError("Scheme \(scheme) not supported for plain (unsigned) requests")
     }
   }
   
