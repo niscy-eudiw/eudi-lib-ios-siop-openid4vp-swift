@@ -339,37 +339,13 @@ internal actor ClientAuthenticator {
 
     let allSANHosts = dnsNames + uriSANHosts
 
-    // Check 1: Exact match
-    if allSANHosts.contains(responseHost) {
-      return // Valid: exact host match
+    // Require exact host match in certificate SANs
+    guard allSANHosts.contains(responseHost) else {
+      throw ValidationError.validationError(
+        "response_uri host '\(responseHost)' is not in certificate's Subject Alternative Names. " +
+        "Available SANs: \(allSANHosts.joined(separator: ", "))"
+      )
     }
-
-    // Check 2: Same registrable domain (allows sibling subdomains)
-    // e.g., dev.verifier.eudiw.dev and dev.verifier-backend.eudiw.dev both share eudiw.dev
-    let responseBaseDomain = extractBaseDomain(from: responseHost)
-
-    for sanHost in allSANHosts {
-      let sanBaseDomain = extractBaseDomain(from: sanHost)
-      if responseBaseDomain == sanBaseDomain && !responseBaseDomain.isEmpty {
-        return // Valid: same organization domain
-      }
-    }
-
-    throw ValidationError.validationError(
-      "response_uri host '\(responseHost)' is not in certificate's Subject Alternative Names"
-    )
-  }
-
-  /// Extracts the base/registrable domain from a hostname.
-  /// For example: "dev.verifier-backend.eudiw.dev" -> "eudiw.dev"
-  /// This is a simplified implementation that assumes the last two components form the registrable domain.
-  private func extractBaseDomain(from host: String) -> String {
-    let components = host.split(separator: ".").map(String.init)
-    guard components.count >= 2 else {
-      return host
-    }
-    // Return last 2 components (e.g., "eudiw.dev")
-    return components.suffix(2).joined(separator: ".")
   }
 
   /// Validates that for redirect_uri scheme, the client_id equals the response destination.
