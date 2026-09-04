@@ -116,16 +116,12 @@ internal actor ClientAuthenticator {
         throw ValidationError.validationError("No valid certificate in chain")
       }
 
-      if expectedHash != verifierId.originalClientId {
+      guard expectedHash == verifierId.originalClientId else {
         throw ValidationError.validationError("ClientId does not match leaf certificate's SHA-256 hash")
       }
 
-      // Validate response_uri host is in certificate SANs
-      try validateResponseUriAgainstCertificateSANs(
-        responseDestination: responseDestination,
-        certificate: certificate
-      )
-
+      // For x509_hash, the certificate hash IS the authentication.
+      // No additional response_uri binding needed.
       return .x509Hash(
         clientId: verifierId.originalClientId,
         authenticationCertificate: certificate
@@ -145,10 +141,25 @@ internal actor ClientAuthenticator {
         throw ValidationError.validationError("No certificate in chain")
       }
 
-      // Validate response_uri host is in certificate SANs
-      try validateResponseUriAgainstCertificateSANs(
+      // Extract DNS SANs from certificate
+      let dnsNames = try certificate.extensions.subjectAlternativeNames?
+        .rawSubjectAlternativeNames() ?? []
+
+      guard !dnsNames.isEmpty else {
+        throw ValidationError.validationError("Certificate missing DNS names in Subject Alternative Names")
+      }
+
+      // Verify client_id (dns name) is in the certificate's DNS SANs
+      guard dnsNames.contains(verifierId.originalClientId) else {
+        throw ValidationError.validationError(
+          "ClientId '\(verifierId.originalClientId)' not found in certificate's subject alternative names"
+        )
+      }
+
+      // Bind response_uri to the authenticated client_id (dns name)
+      try validateResponseUriMatchesClientId(
         responseDestination: responseDestination,
-        certificate: certificate
+        originalClientId: verifierId.originalClientId
       )
 
       return .x509SanDns(
@@ -308,11 +319,12 @@ internal actor ClientAuthenticator {
 
   // MARK: - Response URI Binding Validation
 
-  /// Validates that the response destination host is in the certificate's Subject Alternative Names.
-  /// This ensures credentials are only sent to endpoints controlled by the authenticated verifier.
-  private func validateResponseUriAgainstCertificateSANs(
+  /// Validates that the response destination host matches the authenticated client_id.
+  /// For x509_san_dns, the client_id (dns name) is validated against the certificate's
+  /// dNSName SANs per RFC5280. The response_uri host must match this authenticated identity.
+  private func validateResponseUriMatchesClientId(
     responseDestination: URL?,
-    certificate: Certificate
+    originalClientId: String
   ) throws {
     guard let responseDestination = responseDestination else {
       // No response destination to validate - this will be caught later in the flow
@@ -325,48 +337,11 @@ internal actor ClientAuthenticator {
       )
     }
 
-    // Collect all SAN hosts (from both DNS names and URI SANs)
-    let dnsNames = try certificate.extensions.subjectAlternativeNames?
-      .rawSubjectAlternativeNames() ?? []
-
-    let uriSANs = try certificate.extensions.subjectAlternativeNames?
-      .rawUniformResourceIdentifiers() ?? []
-
-    let uriSANHosts = uriSANs.compactMap { URL(string: $0)?.host }
-
-    let allSANHosts = dnsNames + uriSANHosts
-
-    // Check 1: Exact match
-    if allSANHosts.contains(responseHost) {
-      return // Valid: exact host match
+    guard responseHost == originalClientId else {
+      throw ValidationError.validationError(
+        "response_uri host '\(responseHost)' must match client_id '\(originalClientId)'"
+      )
     }
-
-    // Check 2: Same registrable domain (allows sibling subdomains)
-    // e.g., dev.verifier.eudiw.dev and dev.verifier-backend.eudiw.dev both share eudiw.dev
-    let responseBaseDomain = extractBaseDomain(from: responseHost)
-
-    for sanHost in allSANHosts {
-      let sanBaseDomain = extractBaseDomain(from: sanHost)
-      if responseBaseDomain == sanBaseDomain && !responseBaseDomain.isEmpty {
-        return // Valid: same organization domain
-      }
-    }
-
-    throw ValidationError.validationError(
-      "response_uri host '\(responseHost)' is not in certificate's Subject Alternative Names"
-    )
-  }
-
-  /// Extracts the base/registrable domain from a hostname.
-  /// For example: "dev.verifier-backend.eudiw.dev" -> "eudiw.dev"
-  /// This is a simplified implementation that assumes the last two components form the registrable domain.
-  private func extractBaseDomain(from host: String) -> String {
-    let components = host.split(separator: ".").map(String.init)
-    guard components.count >= 2 else {
-      return host
-    }
-    // Return last 2 components (e.g., "eudiw.dev")
-    return components.suffix(2).joined(separator: ".")
   }
 
   /// Validates that for redirect_uri scheme, the client_id equals the response destination.
