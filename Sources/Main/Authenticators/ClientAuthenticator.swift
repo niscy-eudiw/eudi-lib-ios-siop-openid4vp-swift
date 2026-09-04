@@ -116,16 +116,12 @@ internal actor ClientAuthenticator {
         throw ValidationError.validationError("No valid certificate in chain")
       }
 
-      if expectedHash != verifierId.originalClientId {
+      guard expectedHash == verifierId.originalClientId else {
         throw ValidationError.validationError("ClientId does not match leaf certificate's SHA-256 hash")
       }
 
-      // Validate response_uri host is in certificate SANs
-      try validateResponseUriAgainstCertificateSANs(
-        responseDestination: responseDestination,
-        certificate: certificate
-      )
-
+      // For x509_hash, the certificate hash IS the authentication.
+      // No additional response_uri binding needed.
       return .x509Hash(
         clientId: verifierId.originalClientId,
         authenticationCertificate: certificate
@@ -145,10 +141,25 @@ internal actor ClientAuthenticator {
         throw ValidationError.validationError("No certificate in chain")
       }
 
-      // Validate response_uri host is in certificate SANs
-      try validateResponseUriAgainstCertificateSANs(
+      // Extract DNS SANs from certificate
+      let dnsNames = try certificate.extensions.subjectAlternativeNames?
+        .rawSubjectAlternativeNames() ?? []
+
+      guard !dnsNames.isEmpty else {
+        throw ValidationError.validationError("Certificate missing DNS names in Subject Alternative Names")
+      }
+
+      // Verify client_id (dns name) is in the certificate's DNS SANs
+      guard dnsNames.contains(verifierId.originalClientId) else {
+        throw ValidationError.validationError(
+          "ClientId '\(verifierId.originalClientId)' not found in certificate's subject alternative names"
+        )
+      }
+
+      // Bind response_uri to the authenticated client_id (dns name)
+      try validateResponseUriMatchesClientId(
         responseDestination: responseDestination,
-        certificate: certificate
+        originalClientId: verifierId.originalClientId
       )
 
       return .x509SanDns(
@@ -311,11 +322,12 @@ internal actor ClientAuthenticator {
 
   // MARK: - Response URI Binding Validation
 
-  /// Validates that the response destination host is in the certificate's Subject Alternative Names.
-  /// This ensures credentials are only sent to endpoints controlled by the authenticated verifier.
-  private func validateResponseUriAgainstCertificateSANs(
+  /// Validates that the response destination host matches the authenticated client_id.
+  /// For x509_san_dns, the client_id (dns name) is validated against the certificate's
+  /// dNSName SANs per RFC5280. The response_uri host must match this authenticated identity.
+  private func validateResponseUriMatchesClientId(
     responseDestination: URL?,
-    certificate: Certificate
+    originalClientId: String
   ) throws {
     guard let responseDestination = responseDestination else {
       // No response destination to validate - this will be caught later in the flow
@@ -328,22 +340,9 @@ internal actor ClientAuthenticator {
       )
     }
 
-    // Collect all SAN hosts (from both DNS names and URI SANs)
-    let dnsNames = try certificate.extensions.subjectAlternativeNames?
-      .rawSubjectAlternativeNames() ?? []
-
-    let uriSANs = try certificate.extensions.subjectAlternativeNames?
-      .rawUniformResourceIdentifiers() ?? []
-
-    let uriSANHosts = uriSANs.compactMap { URL(string: $0)?.host }
-
-    let allSANHosts = dnsNames + uriSANHosts
-
-    // Require exact host match in certificate SANs
-    guard allSANHosts.contains(responseHost) else {
+    guard responseHost == originalClientId else {
       throw ValidationError.validationError(
-        "response_uri host '\(responseHost)' is not in certificate's Subject Alternative Names. " +
-        "Available SANs: \(allSANHosts.joined(separator: ", "))"
+        "response_uri host '\(responseHost)' must match client_id '\(originalClientId)'"
       )
     }
   }
