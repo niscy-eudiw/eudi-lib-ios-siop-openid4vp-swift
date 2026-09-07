@@ -35,7 +35,7 @@ public actor ErrorDispatcher: DispatcherType {
   public func dispatch(poster: any Posting) async throws -> DispatchOutcome {
 
     guard let response = error.responseWith(details: details) else {
-      return .rejected(reason: "Unsupported response mode")
+      return .rejected(redirectURI: nil)
     }
 
     let result = try await service.formCheck(
@@ -43,7 +43,22 @@ public actor ErrorDispatcher: DispatcherType {
       response: response
     )
 
-    return result.1 == true ? .accepted(redirectURI: URL(string: result.0)) : .rejected(reason: "")
+    if result.1 {
+      return .accepted(redirectURI: URL(string: result.0))
+    } else {
+      let redirectURI = Self.parseRedirectURI(result.0)
+      return .rejected(redirectURI: redirectURI)
+    }
+  }
+
+  /// Parses the error response body to extract redirect_uri
+  private static func parseRedirectURI(_ responseBody: String) -> URL? {
+    guard let data = responseBody.data(using: .utf8),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let redirectURIString = json["redirect_uri"] as? String else {
+      return nil
+    }
+    return URL(string: redirectURIString)
   }
 }
 

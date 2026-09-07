@@ -47,6 +47,21 @@ public actor Dispatcher: DispatcherType {
       response: self.authorizationResponse
     )
 
-    return result.1 == true ? .accepted(redirectURI: URL(string: result.0)) : .rejected(reason: result.0)
+    if result.1 {
+      return .accepted(redirectURI: URL(string: result.0))
+    } else {
+      let redirectURI = Self.parseRedirectURI(result.0)
+      return .rejected(redirectURI: redirectURI)
+    }
+  }
+
+  /// Parses the error response body to extract redirect_uri
+  private static func parseRedirectURI(_ responseBody: String) -> URL? {
+    guard let data = responseBody.data(using: .utf8),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let redirectURIString = json["redirect_uri"] as? String else {
+      return nil
+    }
+    return URL(string: redirectURIString)
   }
 }
