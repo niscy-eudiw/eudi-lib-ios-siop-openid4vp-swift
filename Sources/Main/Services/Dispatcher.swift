@@ -21,6 +21,18 @@ public protocol DispatcherType {
   func dispatch(poster: Posting) async throws -> DispatchOutcome
 }
 
+extension DispatcherType {
+  /// Parses the response body to extract redirect_uri
+  static func parseRedirectURI(_ responseBody: String) -> URL? {
+    guard let data = responseBody.data(using: .utf8),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let redirectURIString = json["redirect_uri"] as? String else {
+      return nil
+    }
+    return URL(string: redirectURIString)
+  }
+}
+
 /// An implementation of the `DispatcherType` protocol.
 public actor Dispatcher: DispatcherType {
   /// The authorization service used for posting responses.
@@ -53,15 +65,5 @@ public actor Dispatcher: DispatcherType {
       let redirectURI = Self.parseRedirectURI(result.0)
       return .rejected(redirectURI: redirectURI)
     }
-  }
-
-  /// Parses the error response body to extract redirect_uri
-  private static func parseRedirectURI(_ responseBody: String) -> URL? {
-    guard let data = responseBody.data(using: .utf8),
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let redirectURIString = json["redirect_uri"] as? String else {
-      return nil
-    }
-    return URL(string: redirectURIString)
   }
 }
