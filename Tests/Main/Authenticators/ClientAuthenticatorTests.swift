@@ -59,7 +59,9 @@ final class ClientAuthenticatorTests: XCTestCase {
 
     let authenticator = ClientAuthenticator(config: config)
     let client = try await authenticator.authenticate(
-      fetchRequest: .jwtSecured(clientId: clientId, jwt: jwt)
+      fetchRequest: .jwtSecured(clientId: clientId, jwt: jwt),
+      responseUri: URL(string: "https://\(host)/callback")!,
+      redirectUri: nil
     )
 
     // The resolved client must expose the bare host as its original id ...
