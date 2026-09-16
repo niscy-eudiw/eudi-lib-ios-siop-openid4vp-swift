@@ -72,6 +72,10 @@ internal actor RequestFetcher {
   ) async throws -> (jwt: String, walletNonce: String?) {
     switch requestUriMethod {
     case .GET:
+      // Check if GET is supported by wallet configuration
+      guard config?.jarConfiguration.supportedRequestUriMethods.isGetSupported() == true else {
+        throw AuthorizationError.invalidRequestUriMethod
+      }
       let jwt = try await getJwtViaGET(
         config: config,
         clientId: clientId,
@@ -80,6 +84,10 @@ internal actor RequestFetcher {
       return (jwt, nil)
     case .POST:
       if config?.jarConfiguration.supportedRequestUriMethods.isPostSupported() == nil {
+        // POST requested but not supported - check if GET is allowed as fallback
+        guard config?.jarConfiguration.supportedRequestUriMethods.isGetSupported() == true else {
+          throw AuthorizationError.invalidRequestUriMethod
+        }
         let jwt = try await getJwtViaGET(
           config: config,
           clientId: clientId,
@@ -87,7 +95,7 @@ internal actor RequestFetcher {
         )
         return (jwt, nil)
       }
-        
+
       let (jwt, nonce) = try await getJwtViaPOST(
         config: config,
         requestUrl: requestUrl,
