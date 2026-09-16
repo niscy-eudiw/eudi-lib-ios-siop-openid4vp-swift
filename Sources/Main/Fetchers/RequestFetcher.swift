@@ -147,11 +147,13 @@ internal actor RequestFetcher {
     
     let isNotRequired = options.jarEncryption.isNotRequired
     let nonce = try generateNonce(from: options)
+    // When encryption is required, use try to fail fast on key generation errors
+    // When encryption is not required, keys should be nil
     let keys: (
       key: SecKey,
       jwk: ECPrivateKey
     )? = !isNotRequired ? (
-      try? generateKeysIfNeeded(
+      try generateKeysIfNeeded(
         for: supportedMethods
       )
     ) : nil
@@ -172,7 +174,8 @@ internal actor RequestFetcher {
     let finalJwt = try decryptIfNeeded(
       config: config,
       jwt: jwt,
-      keys: keys
+      keys: keys,
+      encryptionRequired: !isNotRequired
     )
     
     let expectedWalletAudience: String? = walletMetadata != nil
@@ -268,47 +271,52 @@ internal actor RequestFetcher {
   private func decryptIfNeeded(
     config: OpenId4VPConfiguration?,
     jwt: String,
-    keys: (key: SecKey, jwk: ECPrivateKey)?
+    keys: (key: SecKey, jwk: ECPrivateKey)?,
+    encryptionRequired: Bool
   ) throws -> String {
     guard let jwk = keys?.jwk else {
+      // If encryption is required but we have no keys, fail closed
+      if encryptionRequired {
+        throw AuthorizationError.jwtDecryptionFailed
+      }
       return jwt
     }
-    
+
     do {
       let encryptedJwe = try JWE(compactSerialization: jwt)
-        
+
       let supportedEncryptionAlgorithms: [KeyManagementAlgorithm] = config?.responseEncryptionConfiguration.supportedAlgorithms.compactMap { algorithm in
           return KeyManagementAlgorithm(algorithm: algorithm)
       } ?? []
-      
+
       guard let headerKeyManagementAlgorithm = encryptedJwe.header.keyManagementAlgorithm else {
         throw ValidationError.validationError(
           "JWE header does not contain key management algorithm"
         )
       }
-      
+
       if !supportedEncryptionAlgorithms.contains(headerKeyManagementAlgorithm) {
         throw ValidationError.validationError(
           "JWEObject must contain a supported encryption algorithm"
         )
       }
-      
+
       let supportedEncryptionMethods: [ContentEncryptionAlgorithm] = config?.responseEncryptionConfiguration.supportedMethods.compactMap { method in
         return ContentEncryptionAlgorithm(encryptionMethod: method)
       } ?? []
-      
+
       guard let headerContentEncryptionAlgorithm = encryptedJwe.header.contentEncryptionAlgorithm else {
         throw ValidationError.validationError(
-          "JWE header does not contain key management algorithm"
+          "JWE header does not contain content encryption algorithm"
         )
       }
-      
+
       if !supportedEncryptionMethods.contains(headerContentEncryptionAlgorithm) {
         throw ValidationError.validationError(
           "JWEObject must contain a supported encryption method"
         )
       }
-        
+
       guard let decrypter = Decrypter(
         keyManagementAlgorithm: headerKeyManagementAlgorithm,
         contentEncryptionAlgorithm: headerContentEncryptionAlgorithm,
@@ -316,7 +324,7 @@ internal actor RequestFetcher {
       ) else {
         throw AuthorizationError.jwtDecryptionFailed
       }
-      
+
       let payloadData = try encryptedJwe.decrypt(using: decrypter).data()
       guard
         let decoded = payloadData.base64EncodedString().base64Decoded(),
@@ -324,8 +332,12 @@ internal actor RequestFetcher {
         throw AuthorizationError.jwtDecryptionFailed
       }
       return jwtString
-      
+
     } catch {
+      // Fail closed when encryption is required
+      if encryptionRequired {
+        throw error
+      }
       return jwt
     }
   }
