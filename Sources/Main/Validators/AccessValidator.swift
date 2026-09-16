@@ -121,7 +121,7 @@ public actor AccessValidator: AccessValidating {
       throw ValidationError.validationError("x5c header field does not contain a serialized leaf certificate")
     }
 
-    let certificates: [Certificate] = parseCertificates(from: chain)
+    let certificates: [Certificate] = try parseCertificates(from: chain)
 
     guard !certificates.isEmpty else {
       throw ValidationError.validationError("x5c header field does not contain a serialized leaf certificate")

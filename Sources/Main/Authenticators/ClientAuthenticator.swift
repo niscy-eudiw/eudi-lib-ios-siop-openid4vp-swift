@@ -108,7 +108,7 @@ internal actor ClientAuthenticator {
         throw ValidationError.validationError("No certificate in header")
       }
 
-      let certificates: [Certificate] = parseCertificates(from: chain)
+      let certificates: [Certificate] = try parseCertificates(from: chain)
       guard
         let certificate = certificates.first,
         let expectedHash = try? certificate.hashed()
@@ -136,7 +136,7 @@ internal actor ClientAuthenticator {
         throw ValidationError.validationError("No certificate in header")
       }
 
-      let certificates: [Certificate] = parseCertificates(from: chain)
+      let certificates: [Certificate] = try parseCertificates(from: chain)
       guard let certificate = certificates.first else {
         throw ValidationError.validationError("No certificate in chain")
       }
