@@ -167,10 +167,11 @@ internal actor ClientAuthenticator {
         certificate: certificate
       )
 
-    case .decentralizedIdentifier(let did, let keyLookup):
+    case .decentralizedIdentifier(_, let keyLookup):
+      // Use the client_id from the request, not from configuration
       return try await didPublicKeyLookup(
         jws: try JWS(compactSerialization: jwt),
-        clientId: did.string,
+        clientId: verifierId.originalClientId,
         keyLookup: keyLookup
       )
 
@@ -288,26 +289,38 @@ internal actor ClientAuthenticator {
     clientId: String,
     keyLookup: DIDPublicKeyLookupAgentType
   ) async throws -> Client {
-    
+
     guard let kid = jws.header.kid else {
       throw ValidationError.validationError("kid not found in JWT header")
     }
-    
-    guard
-      let keyUrl = AbsoluteDIDUrl.parse(kid),
-      keyUrl.string.hasPrefix(clientId)
-    else {
-      throw ValidationError.validationError("kid not found in JWT header")
+
+    guard let keyUrl = AbsoluteDIDUrl.parse(kid) else {
+      throw ValidationError.validationError("kid is not a valid DID URL")
     }
-    
+
+    // Parse the client_id as a DID
     guard let clientIdAsDID = DID.parse(clientId) else {
-      throw ValidationError.validationError("Invalid DID")
+      throw ValidationError.validationError("client_id is not a valid DID")
     }
-    
-    guard let publicKey = await keyLookup.resolveKey(from: clientIdAsDID) else {
-      throw ValidationError.validationError("Unable to extract public key from DID")
+
+    // Extract the base DID from the kid URL
+    guard let kidBaseDID = keyUrl.did else {
+      throw ValidationError.validationError("Could not extract base DID from kid")
     }
-    
+
+    // The kid's base DID must exactly match the client_id DID
+    guard kidBaseDID.string == clientIdAsDID.string else {
+      throw ValidationError.validationError(
+        "kid DID '\(kidBaseDID.string)' does not match client_id '\(clientIdAsDID.string)'"
+      )
+    }
+
+    // Pass the full AbsoluteDIDUrl (with fragment) to the lookup agent
+    // so it can resolve the specific verification method
+    guard let publicKey = await keyLookup.resolveKey(from: keyUrl) else {
+      throw ValidationError.validationError("Unable to extract public key from DID URL")
+    }
+
     try jws.verifyJWS(
       publicKey: publicKey
     )
