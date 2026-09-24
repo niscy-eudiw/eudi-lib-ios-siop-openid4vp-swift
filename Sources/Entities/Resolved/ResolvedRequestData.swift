@@ -47,10 +47,17 @@ public extension ResolvedRequestData {
   ) async throws {
 
     let request = validatedAuthorizationRequest.request
-    let commonFormats = VpFormatsSupported.common(request.vpFormatsSupported, vpConfiguration.vpFormatsSupported) ?? request.vpFormatsSupported
+    guard let commonFormats = VpFormatsSupported.common(request.vpFormatsSupported, vpConfiguration.vpFormatsSupported) else {
+      throw ValidationError.invalidFormat
+    }
     let presentationQuery = try await Self.resolvePresentationQuery(
       from: request.querySource
     )
+
+    // Validate DCQL credential formats against wallet's supported formats
+    if case .byDigitalCredentialsQuery(let dcql) = presentationQuery {
+      try Self.validateDCQLFormats(dcql: dcql, walletFormats: vpConfiguration.vpFormatsSupported)
+    }
 
     self = .init(request: .init(
       presentationQuery: presentationQuery,
@@ -93,7 +100,19 @@ public extension ResolvedRequestData {
 }
 
 private extension ResolvedRequestData {
-  
+
+  /// Validates that all DCQL credential formats are supported by the wallet.
+  /// Throws `ValidationError.invalidRequest` if any format is unsupported.
+  static func validateDCQLFormats(dcql: DCQL, walletFormats: VpFormatsSupported) throws {
+    let supportedFormatStrings = walletFormats.supportedFormatStrings()
+    let queryFormats = Set(dcql.credentials.map { $0.format.format })
+    let unsupportedFormats = queryFormats.subtracting(supportedFormatStrings)
+
+    guard unsupportedFormats.isEmpty else {
+      throw ValidationError.invalidRequest
+    }
+  }
+
   static func resolvePresentationQuery(
     from source: QuerySource
   ) async throws -> PresentationQuery {
