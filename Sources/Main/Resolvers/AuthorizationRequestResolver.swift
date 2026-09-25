@@ -53,6 +53,12 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
         fetcher: fetcher,
         poster: poster
       )
+    } catch let validationError as ValidationError {
+      // Pass through typed ValidationError unchanged
+      return .invalidResolution(
+        error: validationError,
+        dispatchDetails: nil
+      )
     } catch {
       return .invalidResolution(
         error: ValidationError.validationError(error.localizedDescription),
@@ -66,6 +72,21 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
         requestAuthenticator: requestAuthenticator,
         config: walletConfiguration,
         fetchedRequest: fetchedRequest
+      )
+    } catch let validationError as ValidationError {
+      // Pass through typed ValidationError unchanged
+      let dispatchDetails: ErrorDispatchDetails? = switch walletConfiguration.errorDispatchPolicy {
+      case .allClients:
+        optionalDispatchDetails(
+          config: walletConfiguration,
+          fetchedRequest: fetchedRequest
+        )
+      case .onlyAuthenticatedClients:
+        nil
+      }
+      return .invalidResolution(
+        error: validationError,
+        dispatchDetails: dispatchDetails
       )
     } catch {
       let dispatchDetails: ErrorDispatchDetails? = switch walletConfiguration.errorDispatchPolicy {
@@ -156,6 +177,15 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
         nonce: nonce,
         clientMetaData: validatedClientMetaData
       )
+    } catch let validationError as ValidationError {
+      // Pass through typed ValidationError unchanged
+      return .invalidResolution(
+        error: validationError,
+        dispatchDetails: optionalDispatchDetails(
+          config: walletConfiguration,
+          requestObject: authorizedRequest.requestObject
+        )
+      )
     } catch {
       return .invalidResolution(
         error: ValidationError.validationError(error.localizedDescription),
@@ -172,6 +202,16 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
         config: walletConfiguration,
         validatedClientMetaData: validatedClientMetaData,
         validatedAuthorizationRequest: validated
+      )
+    } catch let validationError as ValidationError {
+      // Pass through typed ValidationError unchanged
+      return .invalidResolution(
+        error: validationError,
+        dispatchDetails: optionalDispatchDetails(
+          validatedRequestObject: validated,
+          clientMetaData: validatedClientMetaData,
+          config: walletConfiguration
+        )
       )
     } catch {
       return .invalidResolution(
@@ -190,6 +230,16 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
       authorizationResult = try await authorizeRequest(
         config: walletConfiguration,
         resolved: resolved
+      )
+    } catch let validationError as ValidationError {
+      // Pass through typed ValidationError unchanged
+      return .invalidResolution(
+        error: validationError,
+        dispatchDetails: optionalDispatchDetails(
+          validatedRequestObject: validated,
+          clientMetaData: validatedClientMetaData,
+          config: walletConfiguration
+        )
       )
     } catch {
       return .invalidResolution(

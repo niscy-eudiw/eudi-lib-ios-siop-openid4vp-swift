@@ -60,7 +60,7 @@ extension AuthorizationRequestErrorCode {
   public static func fromError(_ error: AuthorizationRequestError) -> AuthorizationRequestErrorCode {
     if let validationError = error as? ValidationError {
       switch validationError {
-      // Client-related errors
+      // Client-related errors (RP cannot be trusted)
       case .unsupportedClientIdScheme:
         return .invalidClient
       case .invalidClientMetadata:
@@ -76,6 +76,33 @@ extension AuthorizationRequestErrorCode {
       case .invalidVerifierAttestationFormat:
         return .invalidClient
       case .invalidVerifierAttestationCredentialIds:
+        return .invalidClient
+
+      // RP Authentication Failures
+      // These indicate the RP cannot be authenticated/trusted
+      case .untrustedCertificateChain:
+        return .invalidClient
+      case .clientIdNotInCertificateSAN:
+        return .invalidClient
+      case .clientIdCertificateHashMismatch:
+        return .invalidClient
+      case .invalidRequestSignature:
+        return .invalidClient
+      case .preregisteredClientNotFound:
+        return .invalidClient
+      case .unsignedRequestNotPermitted:
+        return .invalidClient
+      case .missingCertificateInHeader:
+        return .invalidClient
+      case .invalidDIDUrl:
+        return .invalidClient
+      case .didClientIdMismatch:
+        return .invalidClient
+      case .publicKeyResolutionFailed:
+        return .invalidClient
+      case .responseUriBindingFailed:
+        return .invalidClient
+      case .invalidVerifierAttestation:
         return .invalidClient
 
       // Request URI errors
