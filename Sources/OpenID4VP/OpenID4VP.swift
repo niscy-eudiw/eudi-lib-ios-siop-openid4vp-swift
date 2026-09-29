@@ -75,7 +75,7 @@ public class OpenID4VP: OpenID4VPType {
 
     case .failure(let error):
       return .invalidResolution(
-        error: ValidationError.validationError(error.localizedDescription),
+        error: (error as? AuthorizationRequestError) ?? ValidationError.validationError(error.localizedDescription),
         dispatchDetails: nil
       )
     }

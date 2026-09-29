@@ -131,8 +131,9 @@ internal struct QueryHelper {
       scope: string("scope"),
       responseMode: string("response_mode"),
       state: string("state"),
-      transactionData: jsonArray(Constants.TRANSACTION_DATA),
-      verifierInfo: jsonArrayObject(Constants.VERIFIER_INFO)
+      transactionData: json(Constants.TRANSACTION_DATA)?.arrayObject as? [String],
+      verifierInfo: jsonArrayObject(Constants.VERIFIER_INFO),
+      malformedTransactionData: string(Constants.TRANSACTION_DATA) != nil && (json(Constants.TRANSACTION_DATA)?.arrayObject as? [String]) == nil
     )
   }
 

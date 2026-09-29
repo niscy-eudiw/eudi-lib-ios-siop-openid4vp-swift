@@ -87,27 +87,6 @@ public actor AuthorisationService: AuthorisationServiceType {
       return try result.get()
 
     case .directPostJwt(let url, let data, let responseEncryptionSpecification):
-      // Handle invalid request case
-      if case .invalidRequest(let error, _, let state, _) = data {
-        let payload: [String: Any] = [
-          "error": AuthorizationRequestErrorCode.fromError(error).rawValue,
-          "error_description": error.localizedDescription,
-          "state": state as Any
-        ].compactMapValues { $0 }
-
-        let post = VerifierFormPost(
-          additionalHeaders: ["Content-Type": ContentType.form.rawValue],
-          url: url,
-          formData: payload
-        )
-
-        let result: Result<(String, Bool), PostError> = await poster.check(
-          key: "redirect_uri",
-          request: post.urlRequest
-        )
-        return try result.get()
-      }
-
       let encryptor: ResponseEncryptor = .init()
       let joseResponse = try await encryptor.encryptResponse(
         responseEncryptionSpecification: responseEncryptionSpecification,
@@ -150,7 +129,7 @@ private extension AuthorisationService {
       return [
         "error": AuthorizationRequestErrorCode.fromError(error).rawValue,
         "error_description": error.localizedDescription,
-        "state": state as Any
+        "state": state as Any?
       ].compactMapValues { $0 }
 
     default: break

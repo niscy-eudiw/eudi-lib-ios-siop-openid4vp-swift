@@ -38,6 +38,7 @@ public enum AuthorizationRequestErrorCode: String, Sendable {
 
   /// Invalid transaction data
   case invalidTransactionData = "invalid_transaction_data"
+  case walletUnavailable = "wallet_unavailable"
 
   // Error Codes
   case userCancelled = "user_cancelled"
@@ -58,19 +59,29 @@ extension AuthorizationRequestErrorCode {
 
   /// Maps an `AuthorizationRequestError` into an `AuthorizationRequestErrorCode`
   public static func fromError(_ error: AuthorizationRequestError) -> AuthorizationRequestErrorCode {
+    if let authorizationError = error as? AuthorizationError {
+      switch authorizationError {
+      case .invalidTransactionData: return .invalidTransactionData
+      case .invalidRequestUriMethod, .unsupportedRequestUriMethod: return .invalidRequestURIMethod
+      default: return .invalidRequest
+      }
+    }
     if let validationError = error as? ValidationError {
       switch validationError {
+      case .invalidTransactionData: return .invalidTransactionData
+      case .invalidScope: return .invalidScope
+      case .walletUnavailable: return .walletUnavailable
       // Client-related errors
       case .unsupportedClientIdScheme:
-        return .invalidClient
+        return .invalidRequest
       case .invalidClientMetadata:
         return .invalidClient
       case .clientIdMismatch:
-        return .invalidClient
+        return .invalidRequest
       case .invalidClientId:
-        return .invalidClient
+        return .invalidRequest
       case .missingClientId:
-        return .invalidClient
+        return .invalidRequest
       case .invalidJarmClientMetadata:
         return .invalidClient
       case .invalidVerifierAttestationFormat:

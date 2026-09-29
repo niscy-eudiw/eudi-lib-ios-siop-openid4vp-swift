@@ -113,6 +113,9 @@ private extension ResolvedRequestData {
   ) throws -> [TransactionData]? {
     /// If there is no transactionData in the request, return nil.
     guard let data = transactionData else { return nil }
+    guard !data.isEmpty else {
+      throw ValidationError.invalidTransactionData("transaction_data must not be empty")
+    }
     
     /// For each item in data, attempt to parse and unwrap it.
     return try data.compactMap { item in

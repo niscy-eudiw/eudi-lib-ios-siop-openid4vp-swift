@@ -55,7 +55,7 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
       )
     } catch {
       return .invalidResolution(
-        error: ValidationError.validationError(error.localizedDescription),
+        error: (error as? AuthorizationRequestError) ?? ValidationError.validationError(error.localizedDescription),
         dispatchDetails: nil
       )
     }
@@ -78,7 +78,7 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
         nil
       }
       return .invalidResolution(
-        error: ValidationError.validationError(error.localizedDescription),
+        error: (error as? AuthorizationRequestError) ?? ValidationError.validationError(error.localizedDescription),
         dispatchDetails: dispatchDetails
       )
     }
@@ -158,10 +158,13 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
       )
     } catch {
       return .invalidResolution(
-        error: ValidationError.validationError(error.localizedDescription),
-        dispatchDetails: optionalDispatchDetails(
-          config: walletConfiguration,
-          requestObject: authorizedRequest.requestObject
+        error: (error as? AuthorizationRequestError) ?? ValidationError.validationError(error.localizedDescription),
+        dispatchDetails: ErrorDispatchDetails(
+          responseMode: responseMode,
+          nonce: authorizedRequest.requestObject.nonce,
+          state: authorizedRequest.requestObject.state,
+          clientId: authorizedRequest.client.id,
+          responseEncryptionSpecification: validatedClientMetaData.responseEncryptionSpecification
         )
       )
     }
@@ -175,7 +178,7 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
       )
     } catch {
       return .invalidResolution(
-        error: ValidationError.validationError(error.localizedDescription),
+        error: (error as? AuthorizationRequestError) ?? ValidationError.validationError(error.localizedDescription),
         dispatchDetails: optionalDispatchDetails(
           validatedRequestObject: validated,
           clientMetaData: validatedClientMetaData,
@@ -193,7 +196,7 @@ public actor AuthorizationRequestResolver: AuthorizationRequestResolving {
       )
     } catch {
       return .invalidResolution(
-        error: ValidationError.validationError(error.localizedDescription),
+        error: (error as? AuthorizationRequestError) ?? ValidationError.validationError(error.localizedDescription),
         dispatchDetails: optionalDispatchDetails(
           validatedRequestObject: validated,
           clientMetaData: validatedClientMetaData,

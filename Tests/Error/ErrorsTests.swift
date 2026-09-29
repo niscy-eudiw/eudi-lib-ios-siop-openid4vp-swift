@@ -184,11 +184,11 @@ class AuthorizationRequestErrorCodeTest: XCTestCase {
 
   // MARK: - Client-related errors → invalid_client
 
-  func testUnsupportedClientIdScheme_MapsToInvalidClient() {
+  func testUnsupportedClientIdScheme_MapsToInvalidRequest() {
     let error: ValidationError = .unsupportedClientIdScheme("unknown")
     let result = AuthorizationRequestErrorCode.fromError(error)
-    XCTAssertEqual(result, .invalidClient)
-    XCTAssertEqual(result.rawValue, "invalid_client")
+    XCTAssertEqual(result, .invalidRequest)
+    XCTAssertEqual(result.rawValue, "invalid_request")
   }
 
   func testInvalidClientMetadata_MapsToInvalidClient() {
@@ -197,16 +197,16 @@ class AuthorizationRequestErrorCodeTest: XCTestCase {
     XCTAssertEqual(result, .invalidClient)
   }
 
-  func testClientIdMismatch_MapsToInvalidClient() {
+  func testClientIdMismatch_MapsToInvalidRequest() {
     let error: ValidationError = .clientIdMismatch("expected", "actual")
     let result = AuthorizationRequestErrorCode.fromError(error)
-    XCTAssertEqual(result, .invalidClient)
+    XCTAssertEqual(result, .invalidRequest)
   }
 
-  func testMissingClientId_MapsToInvalidClient() {
+  func testMissingClientId_MapsToInvalidRequest() {
     let error: ValidationError = .missingClientId
     let result = AuthorizationRequestErrorCode.fromError(error)
-    XCTAssertEqual(result, .invalidClient)
+    XCTAssertEqual(result, .invalidRequest)
   }
 
   func testInvalidVerifierAttestationFormat_MapsToInvalidClient() {
