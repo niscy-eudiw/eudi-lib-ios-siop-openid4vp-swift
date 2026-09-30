@@ -86,7 +86,7 @@ final class FormatTests: XCTestCase {
 
   func testVpFormatSupportedFormatStringJwtVp() {
     let format = VpFormatSupported.jwtVp(algorithms: [])
-    XCTAssertEqual(format.formatString(), "jwt_vp")
+    XCTAssertEqual(format.formatString(), "jwt_vc_json")
   }
 
   func testVpFormatSupportedFormatStringLdpVp() {
