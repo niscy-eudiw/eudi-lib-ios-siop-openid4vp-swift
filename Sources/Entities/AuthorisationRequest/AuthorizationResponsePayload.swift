@@ -50,6 +50,7 @@ public enum AuthorizationResponsePayload: Encodable, Sendable {
     case state
     case nonce
     case error
+    case errorDescription = "error_description"
     case vpToken = "vp_token"
     case presentationSubmission = "presentation_submission"
   }
@@ -75,6 +76,8 @@ public enum AuthorizationResponsePayload: Encodable, Sendable {
     switch self {
     case .openId4VPAuthorizationResponse(_, _, let nonce, _, _):
       nonce
+    case .invalidRequest(_, let nonce, _, _):
+      nonce ?? ""
     default:
       ""
     }
@@ -97,6 +100,10 @@ public enum AuthorizationResponsePayload: Encodable, Sendable {
          try container.encode(state, forKey: .state)
          try container.encode(VpContent .encodeDCQLQuery(verifiablePresentations), forKey: .vpToken)
        }
+     case .invalidRequest(let error, _, let state, _):
+       try container.encode(AuthorizationRequestErrorCode.fromError(error).rawValue, forKey: .error)
+       try container.encode(error.localizedDescription, forKey: .errorDescription)
+       try container.encodeIfPresent(state, forKey: .state)
      case .noConsensusResponseData(let state, let message):
        try container.encode(state, forKey: .state)
        try container.encode(message, forKey: .error)

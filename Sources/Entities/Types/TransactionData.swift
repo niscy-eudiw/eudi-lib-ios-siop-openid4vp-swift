@@ -76,42 +76,47 @@ public struct TransactionData: Codable, Sendable {
     presentationQuery: PresentationQuery
   ) -> Result<TransactionData, Error> {
     Result {
-      let ids: [String] = switch presentationQuery {
-      case .byDigitalCredentialsQuery(let dcql):
-        dcql.credentials.map { $0.id.value }
+      do {
+        let transactionData = TransactionData(value: s)
+        let json = try transactionData.decode()
+        guard json.dictionary != nil else {
+          throw ValidationError.invalidTransactionData("Transaction data must be an object")
+        }
+        let type = try transactionData.type()
+        guard let supported = supportedTypes.first(where: { $0.type == type }) else {
+          throw ValidationError.invalidTransactionData("Unsupported transaction data type: \(type)")
+        }
+        let ids = try transactionData.credentialIds()
+        guard !ids.isEmpty else {
+          throw ValidationError.invalidTransactionData("credential_ids must not be empty")
+        }
+        let dcql: DCQL
+        switch presentationQuery {
+        case .byDigitalCredentialsQuery(let query): dcql = query
+        }
+        guard Set(ids).isSubset(of: Set(dcql.credentials.map(\.id))) else {
+          throw ValidationError.invalidTransactionData("Unknown credential_ids")
+        }
+        guard dcql.credentials.filter({ ids.contains($0.id) }).allSatisfy({ $0.requireCryptographicHolderBinding != false }) else {
+          throw ValidationError.invalidTransactionData("Transaction data requires cryptographic holder binding")
+        }
+        let algorithms = try transactionData.hashAlgorithms()
+        // Hash negotiation is the SD-JWT binding. mdoc transaction types define their
+        // own processing (e.g. CSC QES approval always uses SHA-256 of decoded JSON).
+        let hasMdocAlternative = dcql.credentials.contains { ids.contains($0.id) && $0.format.format == OpenId4VPSpec.FORMAT_MSO_MDOC }
+        guard hasMdocAlternative || algorithms.contains(where: { supported.hashAlgorithms.contains($0) }) else {
+          throw ValidationError.invalidTransactionData("Unsupported transaction data hash algorithms")
+        }
+        return transactionData
+      } catch let error as ValidationError {
+        if case .invalidTransactionData = error { throw error }
+        throw ValidationError.invalidTransactionData(error.localizedDescription)
+      } catch {
+        throw ValidationError.invalidTransactionData(error.localizedDescription)
       }
-
-      let transactionData = TransactionData(value: s)
-      try transactionData.isSupported(supportedTypes)
-      try transactionData.hasCorrectIds(ids)
-      return transactionData
     }
   }
 
-  /// Validates if the transaction data type is supported.
-  private func isSupported(_ supportedTypes: [SupportedTransactionDataType]) throws {
-    let actualType = try self.type()                // evaluate once
-
-    let isTypeSupported = supportedTypes.contains { $0.type == actualType }
-    guard isTypeSupported else {
-      throw ValidationError.validationError(
-        "Unsupported transaction data type: \(actualType)"
-      )
-    }
-  }
-
-  /// Validates if the transaction data has the correct credential IDs as per the ids.
-  private func hasCorrectIds(_ ids: [String]) throws {
-    let requestedCredentialIds = try ids.map {
-      try QueryId(value: $0)
-    }
-    guard requestedCredentialIds.containsAll(try self.credentialIds()) else {
-      throw ValidationError.validationError(
-        "Invalid credential IDs: \(String(describing: self.credentialIds))"
-      )
-    }
-  }
-  
   /// Convenience initializer to build a JSON from components.
   internal static func json(
     type: TransactionDataType,
@@ -165,12 +170,13 @@ internal extension JSON {
     return try TransactionDataType(value: typeValue)
   }
 
-  func hashAlgorithms() -> [HashAlgorithm] {
-    if let algorithms = self.optionalStringArray(OpenId4VPSpec.TRANSACTION_DATA_HASH_ALGORITHMS) {
-      return algorithms.map { HashAlgorithm(name: $0) }
-    } else {
-      return [HashAlgorithm.sha256]
+  func hashAlgorithms() throws -> [HashAlgorithm] {
+    guard let value = dictionary?[OpenId4VPSpec.TRANSACTION_DATA_HASH_ALGORITHMS] else { return [.sha256] }
+    guard let algorithms = value.arrayObject as? [String], !algorithms.isEmpty,
+          algorithms.allSatisfy({ !$0.isEmpty }) else {
+      throw ValidationError.invalidTransactionData("transaction_data_hashes_alg must be a non-empty array of strings")
     }
+    return algorithms.map { HashAlgorithm(name: $0) }
   }
 
   func credentialIds() throws -> [QueryId] {
@@ -184,7 +190,8 @@ struct Base64UrlNoPadding {
   /// Decodes a URL-safe base64 string without padding back to Data.
   static func decodeToByteString(_ string: String) throws -> Data {
 
-    guard let data = Data(base64UrlEncoded: string) else {
+    guard !string.isEmpty, string.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }),
+          let data = Data(base64UrlEncoded: string) else {
       throw ValidationError.validationError("Invalid base64 string")
     }
 

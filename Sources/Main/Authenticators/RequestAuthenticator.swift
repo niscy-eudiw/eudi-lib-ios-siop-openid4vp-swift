@@ -67,7 +67,8 @@ internal struct JWTDecoder {
       state: json["state"].string,
       supportedAlgorithm: json["supported_algorithm"].string,
       transactionData: transactionData,
-      verifierInfo: verifierInfo
+      verifierInfo: verifierInfo,
+      malformedTransactionData: json.dictionary?["transaction_data"] != nil && transactionData == nil
     )
   }
 }
@@ -141,6 +142,9 @@ internal actor RequestAuthenticator {
     requestObject: UnvalidatedRequestObject,
     clientMetaData: ClientMetaData.Validated
   ) async throws -> ValidatedRequestData {
+    guard !requestObject.malformedTransactionData else {
+      throw ValidationError.invalidTransactionData("transaction_data must be a non-empty array of strings")
+    }
     let formats: VpFormatsSupported = clientMetaData.vpFormatsSupported
     let querySource = try parseQuerySource(
       requestObject: requestObject
@@ -249,6 +253,7 @@ internal actor RequestAuthenticator {
       )
       
     } else {
+      if requestObject.scope != nil { throw ValidationError.invalidScope }
       throw ValidationError.invalidQuerySource
     }
   }

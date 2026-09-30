@@ -43,7 +43,7 @@ final class TransactionDataTests: XCTestCase {
     let credentialIdsFromJSON = try decodedJSON.credentialIds().map { $0.value }
     XCTAssertEqual(Set(credentialIdsFromJSON), Set(["cred1", "cred2"]))
 
-    let hashAlgorithmsFromJSON = decodedJSON.hashAlgorithms().map { $0.name }
+    let hashAlgorithmsFromJSON = try decodedJSON.hashAlgorithms().map { $0.name }
     XCTAssertEqual(hashAlgorithmsFromJSON, ["sha-256"])
   }
 

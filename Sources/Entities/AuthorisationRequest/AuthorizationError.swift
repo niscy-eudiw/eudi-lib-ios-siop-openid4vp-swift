@@ -16,7 +16,7 @@
 import Foundation
 
 /// An enumeration representing errors that can occur during authorization.
-public enum AuthorizationError: LocalizedError {
+public enum AuthorizationError: AuthorizationRequestError {
   /// The response type is unsupported.
   case unsupportedResponseType(type: String)
 

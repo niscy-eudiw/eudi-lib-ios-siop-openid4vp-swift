@@ -87,7 +87,7 @@ public extension AuthorizationResponse {
     case .negative(let error):
       let request = resolvedRequest.request
       let payload: AuthorizationResponsePayload = .noConsensusResponseData(
-        state: try request.state ?? { throw AuthorizationError.invalidState }(),
+        state: request.state ?? "",
         error: error
       )
       self = try .buildAuthorizationResponse(

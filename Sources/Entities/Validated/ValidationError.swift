@@ -30,6 +30,9 @@ indirect public enum ValidationError: AuthorizationRequestError, Equatable {
   case invalidJwtPayload
   case invalidRequestUri(String?)
   case invalidRequest
+  case invalidTransactionData(String)
+  case invalidScope
+  case walletUnavailable
   case conflictingData
   case notSupportedOperation
   case invalidFormat
@@ -118,6 +121,12 @@ indirect public enum ValidationError: AuthorizationRequestError, Equatable {
       return ".invalidRequestUri \(uri ?? "")"
     case .conflictingData:
       return ".conflictingData"
+    case .invalidTransactionData(let message):
+      return message
+    case .invalidScope:
+      return "Invalid scope"
+    case .walletUnavailable:
+      return "Wallet unavailable"
     case .invalidRequest:
       return ".invalidRequest"
     case .notSupportedOperation:

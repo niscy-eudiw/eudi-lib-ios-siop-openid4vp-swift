@@ -38,6 +38,8 @@ public struct UnvalidatedRequestObject: Codable, Sendable {
   public let state: String? // OpenId4VP specific, not utilized from ISO-23330-4
   public let supportedAlgorithm: String?
   public let transactionData: [String]?
+  /// Retained until authentication so malformed data can be rejected safely.
+  public let malformedTransactionData: Bool
   public let verifierInfo: [JSON]?
 
   enum CodingKeys: String, CodingKey {
@@ -79,7 +81,8 @@ public struct UnvalidatedRequestObject: Codable, Sendable {
     state: String? = nil,
     supportedAlgorithm: String? = nil,
     transactionData: [String]? = nil,
-    verifierInfo: [JSON]? = nil
+    verifierInfo: [JSON]? = nil,
+    malformedTransactionData: Bool = false
   ) {
     self.responseType = responseType
     self.responseUri = responseUri
@@ -97,6 +100,7 @@ public struct UnvalidatedRequestObject: Codable, Sendable {
     self.responseMode = responseMode
     self.state = state
     self.supportedAlgorithm = supportedAlgorithm
+    self.malformedTransactionData = malformedTransactionData
     self.transactionData = transactionData
     self.verifierInfo = verifierInfo
   }
@@ -126,6 +130,7 @@ public struct UnvalidatedRequestObject: Codable, Sendable {
     supportedAlgorithm = try? container.decode(String.self, forKey: .supportedAlgorithm)
 
     transactionData = try? container.decode([String].self, forKey: .transactionData)
+    malformedTransactionData = container.contains(.transactionData) && transactionData == nil
     verifierInfo = try? container.decode([JSON].self, forKey: .verifierInfo)
   }
 
@@ -153,7 +158,11 @@ public struct UnvalidatedRequestObject: Codable, Sendable {
     try? container.encode(requestUriMethod, forKey: .requestUriMethod)
 
     try? container.encode(supportedAlgorithm, forKey: .supportedAlgorithm)
-    try? container.encode(transactionData, forKey: .transactionData)
+    if malformedTransactionData {
+      try container.encodeNil(forKey: .transactionData)
+    } else {
+      try container.encodeIfPresent(transactionData, forKey: .transactionData)
+    }
     try? container.encode(verifierInfo, forKey: .verifierInfo)
   }
 }
@@ -188,10 +197,9 @@ public extension UnvalidatedRequestObject {
     requestUriMethod = parameters?[CodingKeys.requestUriMethod.rawValue] as? String
 
     supportedAlgorithm = parameters?[CodingKeys.supportedAlgorithm.rawValue] as? String
-    transactionData = JsonHelper.jsonArray(
-      for: "transaction_data",
-      from: url
-    )?.compactMap { $0.string }
+    let rawTransactionData = parameters?[CodingKeys.transactionData.rawValue] as? String
+    transactionData = rawTransactionData.flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }
+    malformedTransactionData = rawTransactionData != nil && transactionData == nil
 
     verifierInfo = JsonHelper.jsonArray(
       for: "verifier_info",
